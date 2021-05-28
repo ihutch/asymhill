@@ -1,18 +1,19 @@
 module AsymHill
-  integer, parameter :: npts=200,nofv=200,nvh=20,nc=2
+  integer, parameter :: npts=200,nofv=200,nvh=60,nc=2
   real, dimension(npts) :: x,phiofx,denofx,deninteg,dFdelx
   real, dimension(nofv) :: vofv,fofv,Pfofv,Forceofv
-  real, dimension(nvh) :: vha,Forcevh,delFdxvh
-  real, dimension(nc) :: vs=[1.5,-1.5],vt=1.,dc=[1.,.0]
+  real, dimension(nvh) :: vha,Forcevh,delFdxvh,dphivh,fofvh
+  real, dimension(nc) :: vs=[1.5,-1.5],vt=1.,dc=[1.,.5]
   character*10 string
-  real :: vh=0.
+  real :: vh=0.,Te=1.,denave
+  logical :: local=.false.,lcd=.true.
 contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine testfvhill(phimax,delphi,phi)
   call multiframe(4,1,1)
   call dcharsize(.02,.02)
   do isigma=-1,1,2
-     call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phi,isigma,&
+     call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phi,isigma,local,&
           nofv,vofv,fofv,Pfofv)
      call autoplot(vofv,fofv,nofv)
      call axis2
@@ -25,7 +26,8 @@ contains
      call legendline(.1,.4,258,'!Ay!@='//string(1:iwidth))
      call autoplot(vofv,Pfofv,nofv)
      call axis2
-     call axlabels('v-v!dh!d','P(v)=!AJ!@f(v)dv')
+     if(isigma.eq.-1)call axlabels('','P(v)=!AJ!@f(v)dv')
+     if(isigma.eq.+1)call axlabels('v-v!dh!d','P(v)=!AJ!@f(v)dv')
   enddo
   call multiframe(0,0,0)
   call pltend
@@ -44,24 +46,30 @@ subroutine finddenofx(phimax,delphi)
      xcor=x(i)/4.
 !     xcor=x(i)/4./sqrt(1.-dph/phimax)  !Symmetrizes curvature at origin.
      phiofx(i)=(phimax-dph)/cosh(xcor)**4+dph
-     call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiofx(i),isigma, &
+     if(phiofx(i).gt.phimax)then
+        write(*,*)'phi>phimax',phiofx(i),phimax,delphi,i,dph,xcor
+        stop
+     endif
+     call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiofx(i),isigma,local, &
           nofv,vofv,fofv,Pfofv)
      denofx(i)=Pfofv(nofv)
      if(i.gt.1)deninteg(i)=deninteg(i-1)+&      !\int n dphi
           (denofx(i)+denofx(i-1))*(phiofx(i)-phiofx(i-1))*.5
-     if(i.gt.1)dFdelx(i)=dFdelx(i-1)+&          !\int n (dphi/dx)dphi
-          (denofx(i)+denofx(i-1))*(phiofx(i)-phiofx(i-1))**2*.5 &
+     if(i.gt.1)dFdelx(i)=dFdelx(i-1)-&          !-\int (dn/dx) dphi
+          (denofx(i)-denofx(i-1))*(phiofx(i)-phiofx(i-1)) &
           /(x(i)-x(i-1))
   enddo
-  write(*,'(a,f8.5,a,f9.5,a,f9.5)')'vh=',vh,' Ion force=',-deninteg(npts),' delF/delx=',dFdelx(npts)
+  if(lcd)write(*,'(a,f8.5,a,f9.5,a,f9.5,a,f9.5)')'vh=',vh,' delphi=',delphi,&
+       ' Ion force=',-deninteg(npts),' delF/delx=',dFdelx(npts)
 end subroutine finddenofx
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine plotdenofx
-  denave=(denofx(1)+denofx(npts))/2
   call multiframe(3,1,0)
   call autoplot(x,phiofx,npts)
   call axis2
   call polyline([x(1),x(npts)],[0.,0.],2)
+  call fwrite(vh,iwidth,2,string)
+  call legendline(.1,1.1,258,'v!dh!d='//string(1:iwidth))
   call axlabels('','!Af!@(x)')
   call autoplot(x,denofx,npts)
   call axis2
@@ -69,7 +77,7 @@ subroutine plotdenofx
   call axlabels('','n!di!d(x)')
   call winset(.true.)
   call color(4)
-  call polyline(x,denave*exp(phiofx),npts)
+  call polyline(x,denave*exp(phiofx/Te),npts)
   call color(15)
   call autoplot(x,deninteg,npts)
   call axis2
@@ -80,21 +88,30 @@ subroutine plotdenofx
 end subroutine plotdenofx
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine finddelphi(phimax,delphi)
-  real, dimension(2) :: deninf
 ! Iterate to find delphi consistent with specified ion distributions.
-!  write(*,*)'j   delphi      n(-)      n(+)'
-  do j=1,4
+! But prevent |delphi| from exceeding 2*phimax because that's improper
+  real, dimension(2) :: deninf
+  if(lcd)write(*,*)'j   delphi      dpp   delphi-dpp   n(-)      n(+)'
+  dpp=delphi
+  do j=1,7
      do i=1,2
         isigma=-3+2*i
         phiinf=isigma*delphi/2.
-!     write(*,*)phimax,delphi,phi
-        call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiinf,isigma,&
+        call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiinf,isigma,local,&
              nofv,vofv,fofv,Pfofv)
         deninf(i)=Pfofv(nofv)
      enddo
-     write(*,'(i2,5f10.5)')j,delphi,deninf
-     delphi=alog(deninf(2)/deninf(1))    ! Times Te
-!     delphi=delphi/3.
+     denave=(deninf(1)+deninf(2))/2.
+!     delphi=delphi+(1-.5/j)*(alog(deninf(2)/deninf(1))-delphi/Te)
+     delphi=delphi+(1-.5/j)*(alog(deninf(2)/deninf(1))*min(1.,Te)-delphi/max(1.,Te))
+     if(lcd)write(*,'(i2,5f10.5)')j,delphi,dpp,delphi-dpp,deninf
+     if(abs(delphi).gt.2.*phimax)then  !Prevent improper delphi
+        write(*,*)'WARNING: Improper delphi suppressed',delphi,phimax
+        delphi=sign(2.*phimax,delphi)
+        exit
+     endif
+     if(abs(delphi-dpp).lt.1.e-4)exit
+     dpp=delphi
   enddo
 !delphi=0.
 end subroutine finddelphi
@@ -103,16 +120,24 @@ subroutine scanvh(vhmin,vhmax,index,phimax,delphi)
 ! Scan vhmin to vhmax to construct arrays of F and delF/delx
 ! Return the highest index of vh at which F crosses from + to -.
   Fprior=0.
+  index=0
+  fofvh=0.
   do i=1,nvh
      vh=vhmin+(i-1.)*(vhmax-vhmin)/(nvh-1.)
-     call finddelphi(phimax,delphi)
-     call finddenofx(phimax,delphi)
-     Force=-deninteg(npts)
-     if(Fprior.gt.0.and.Force.le.0.)index=i
+     do k=1,nc             ! Store the finfty of vh.
+        vt2x2=vt(k)**2*2.
+        gcoef=1./sqrt(vt2x2*3.1415926)
+        fofvh(i)=fofvh(i)+dc(k)*gcoef*exp(-(vh-vs(k))**2/vt2x2)
+     enddo
      vha(i)=vh
+     lcd=.false.
+     call finddelphi(phimax,delphi)
+     dphivh(i)=delphi
+     call finddenofx(phimax,delphi)
+     Force=-deninteg(npts)+denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
+     if(Fprior.gt.0.and.Force.le.0.)index=i
      Forcevh(i)=Force
      delFdxvh(i)=dFdelx(npts)
-!     write(*,*)i,vha(i),Forcevh(i),delFdxvh(i)
      Fprior=Force
   enddo
 end subroutine scanvh
@@ -139,7 +164,7 @@ subroutine timenofx
      x(i)=-xmax+2.*xmax*(i-1.)/(npts-1.)
      phiofx(i)=phimax/cosh(x(i)/4.)**4
      isigma=int(sign(1.,x(i)))
-     call fvhill(nc,dc,vs,vt-vh,phimax,0.,phiofx(i),isigma, &
+     call fvhill(nc,dc,vs,vt-vh,phimax,0.,phiofx(i),isigma,local, &
           nofv,vofv,fofv,Pfofv)
      denofx(i)=Pfofv(nofv)
      if(.not.abs(denofx(i)).ge.0)write(*,*)i,Pfofv(nofv)
@@ -169,30 +194,39 @@ end module AsymHill
 ! fofv(nofv) is the total velocity distribution at vofv
 ! Pfofv(nofv) is the integral of fofv dv. 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine fvhill(nc,dc,vs,vt,phimax,delphi,     &
-     phi,isigma,nofv,vofv,fofv,Pfofv)
+subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
+     nofv,vofv,fofv,Pfofv)
   real :: dc(nc),vs(nc),vt(nc),phimax,phi,delphi
   integer :: isigma, nofv
   real, dimension(nofv) :: vofv, fofv, Pfofv
-
+  logical :: local
+  
   if(isigma.ne.1.and.isigma.ne.-1)stop 'isigma must be +-1'
-  phix2=2.*(phi    -isigma*delphi/2.)  ! 2*(phi   -phiinf)
-  phimx2=2.*(phimax-isigma*delphi/2.)  ! 2*(phimax-phiinf)
+! Decide the meaning of f(v) when delphi !=0.  
+  if(local)then ! f(v) is relative to different phi_infty
+     phix2=2.*(phi    -isigma*delphi/2.)  ! 2*(phi   -phiinf)
+     phimx2=2.*(phimax-isigma*delphi/2.)  ! 2*(phimax-phiinf)
+     delphix2=2.*isigma*delphi  
+     if(phix2.lt.0)then
+        write(*,*)'Impossible phi (<phiinf)',phi,isigma,delphi
+        stop
+     endif
+  else           ! f(v)= f( sigma*sqrt(v^2+2*phi) )
+     phix2=2.*phi
+     phimx2=2.*phimax
+     delphix2=0.
+  endif
   if(phimax.lt.phi)then
      write(*,*)'Normally phi must be < phimax',phi,phimax
      vthresh=0.
   elseif(phimx2.lt.0)then
      write(*,*)'No Potential peak this side',isigma,phimx2
      vthresh=0.
-  elseif(phix2.lt.0)then
-     write(*,*)'Impossible phi (<phiinf)',phi,isigma,delphi
-     stop
   else
      vthresh=isigma*sqrt(phimx2-phix2)
   endif
   Pfofv=0.
   fofv=0.
-    
   do j=1,nc
      vt2x2=vt(j)**2*2.
      gcoef=1./sqrt(vt2x2*3.1415926)
@@ -204,15 +238,13 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,     &
         vsign=sign(1.,vofv(i))
         vdiff=vofv(i)-vthresh
         if(int(vsign).ne.isigma)then              ! Moving inward
-           vinf=vsign*sqrt(phix2+vofv(i)**2)
-           fi=gcoef*exp(-(vinf-vs(j))**2/vt2x2)   ! f(v)=finf(vinf)
-        elseif((phix2+vofv(i)**2).gt.phimx2)then ! Passing
-           vinf=vsign*sqrt(phix2+vofv(i)**2+2.*isigma*delphi)
-           fi=gcoef*exp(-(vinf-vs(j))**2/vt2x2)   ! f(v)=finf(vinf)
-        else   ! Reflected
-           vinf=vsign*sqrt(phix2+vofv(i)**2)
-           fi=gcoef*exp(-(-vinf-vs(j))**2/vt2x2)   ! f(v)=finf(vinf)
+           vinf=vsign*sqrt(max(0.,phix2+vofv(i)**2))
+        elseif((phix2+vofv(i)**2).gt.phimx2)then  ! Passing
+           vinf=vsign*sqrt(max(0.,phix2+delphix2+vofv(i)**2))
+        else                                      ! Reflected
+           vinf=-vsign*sqrt(max(0.,phix2+vofv(i)**2))
         endif
+        fi=gcoef*exp(-(vinf-vs(j))**2/vt2x2)   ! f(v)=finf(vinf)
         fofv(i)=fofv(i)+dc(j)*fi
         if(vdiffm*vdiff.le.0.)then
 ! Crossing threshold at which the discontinuity in f occurs, which is
@@ -245,10 +277,45 @@ call plotdenofx
 vhmin=-5.;vhmax=+5
 index=2
 call scanvh(vhmin,vhmax,index,phimax,delphi)
-write(*,*)index,vha(index-1),vha(index+1),Forcevh(index-1),Forcevh(index)
-
-call autoplot(vha,Forcevh,nvh)
+dFdx0=1.
+if(index.ne.0)then
+   write(*,*)'F=0 at index i     vh(i-1)        vh(i)         F(i-1)          F(i)'
+   write(*,*)index,vha(index-1),vha(index+1),Forcevh(index-1),Forcevh(index)
+   vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
+        (abs(Forcevh(index-1))+abs(Forcevh(index)))
+   fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
+        +fofvh(index)*abs(Forcevh(index-1)))/ &
+        (abs(Forcevh(index-1))+abs(Forcevh(index)))
+   dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
+        +delFdxvh(index)*abs(Forcevh(index-1)))/ &
+        (abs(Forcevh(index-1))+abs(Forcevh(index)))
+   write(*,*)'delF/dx=',delFdxvh(index-1),delFdxvh(index),dFdx0
+   vh=vh0
+   call finddenofx(phimax,delphi)
+   call plotdenofx
+endif
+call multiframe(2,1,0)
+call autoplot(vha,fofvh,nvh)
+call axlabels('','f(v)')
 call axis2
+if(dFdx0.lt.0)call polymark(vh0,Fvh0,1,10)
+   ! Electron force
+call autoplot(vha,denave*Te*(exp(dphivh/(2.*Te))-exp(-dphivh/(2.*Te))),nvh)
+call axlabels('v or v!dh!d','Forces(v!dh!d)')
+call axis2
+call legendline(.05,.8,0,'F!de!d')
+call winset(.true.)
+call polyline([vha(1),vha(nvh)],[0.,0.],2)
+if(index.ne.0)call polyline([vh0,vh0],[-10.,10.],2)
+call color(1)
+call polyline(vha,Forcevh,nvh)      ! Total force
+call legendline(.05,.7,0,'F!di!d+F!de!d')
+call color(2)
+!call dashset(1)
+call polyline(vha,-denave*dphivh/Te+Forcevh,nvh)   ! Ion force
+call legendline(.05,.9,0,'F!di!d')
 call pltend
+
+
 !call timenofx ! For timing comment the above.
 end program
