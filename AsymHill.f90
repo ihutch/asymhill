@@ -6,7 +6,7 @@ module AsymHill
   real, dimension(ncmax) :: vs=[1.5,-1.5,0.,0.],vt=1.,dc=[1.,.5,0.,0.],vss
   real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns
-  real :: phimax=.2,phi=.1,xmax=9.8
+  real :: delphi,phimax=.2,phi=.1,xmax=9.8
   character*30 string,argument
   real :: vh=0.,Te=1.,denave,vh0,Fvh0,dFdx0,vhmin=-4.9,vhmax=4.9
   integer :: index,nc=2,ns=1,pfint=0
@@ -51,7 +51,7 @@ contains
 11  format(i2,a,3f6.3,a,i2,a,3f6.3,a,i2,a,3f6.3,a)
   end subroutine parseAsymargs
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine testfvhill(delphi)
+  subroutine testfvhill
   call multiframe(4,1,1)
   call dcharsize(.02,.02)
   do isigma=-1,1,2
@@ -75,7 +75,7 @@ contains
   call pltend
 end subroutine testfvhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine finddenofx(delphi)
+subroutine finddenofx
 ! Integrate over the potential hill to find the density, force, and
 ! delF/delx (arrays of x), for the current vh and other parameters. 
   deninteg=0.
@@ -197,7 +197,7 @@ subroutine plotex
   call multiframe(0,0,0)
 end subroutine plotex
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine finddelphi(delphi)
+subroutine finddelphi
 ! Iterate to find delphi consistent with specified ion distributions.
 ! But prevent |delphi| from exceeding 2*phimax because that's improper
   real, dimension(2) :: deninf
@@ -226,7 +226,7 @@ subroutine finddelphi(delphi)
 !delphi=0.
 end subroutine finddelphi
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine scanvh(index,delphi)
+subroutine scanvh(index)
 ! Scan vhmin to vhmax to construct arrays of F and delF/delx
 ! Return the highest index of vh at which F crosses from + to -.
   Fprior=0.
@@ -241,9 +241,9 @@ subroutine scanvh(index,delphi)
      enddo
      vha(i)=vh
      lcd=.false.
-     call finddelphi(delphi)
+     call finddelphi
      dphivh(i)=delphi
-     call finddenofx(delphi)
+     call finddenofx
      Force=-deninteg(npts)+denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
      if(Fprior.gt.0.and.Force.le.0.)index=i
      Forcevh(i)=Force
@@ -445,10 +445,10 @@ call parseAsymargs
 call initvofv
 
 if(ltestnofx)then
-   call finddelphi(delphi)
-   call testfvhill(delphi)
+   call finddelphi
+   call testfvhill
    write(*,'(a,9f6.3)')'testnofx: vshift,vtherm,dens',(vs(i),vt(i),dc(i),i=1,nc)
-   call finddenofx(delphi)
+   call finddenofx
 !   call plotdenofx
    call plotex
 endif
@@ -459,7 +459,7 @@ if(ns.ge.3)vsfac=2.
 do i=1,ns
    vs=vss*vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
    index=2
-   call scanvh(index,delphi)
+   call scanvh(index)
    Fcvhns(:,i)=Forcevh
    dFvhns(:,i)=delFdxvh
    fvvhns(:,i)=fofvh
@@ -485,8 +485,8 @@ do i=1,ns
       vh=vh0
       if(ns.lt.3)then
 !         write(*,*)'Calling finddenofx, plotdenofx',i,ns
-         call finddelphi(delphi)
-         call finddenofx(delphi)
+         call finddelphi
+         call finddenofx
          call plotdenofx
       endif
    endif
