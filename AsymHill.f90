@@ -1,15 +1,57 @@
 module AsymHill
-  integer, parameter :: npts=200,nofv=200,nvh=60,nc=2
+  integer, parameter :: npts=200,nofv=400,nvh=100,ncmax=4,nsmax=20
   real, dimension(npts) :: x,phiofx,denofx,deninteg,dFdelx
   real, dimension(nofv) :: vofv,fofv,Pfofv,Forceofv
   real, dimension(nvh) :: vha,Forcevh,delFdxvh,dphivh,fofvh
-  real, dimension(nc) :: vs=[1.5,-1.5],vt=1.,dc=[1.,.5]
-  character*10 string
-  real :: vh=0.,Te=1.,denave
-  logical :: local=.false.,lcd=.true.
+  real, dimension(ncmax) :: vs=[1.5,-1.5,0.,0.],vt=1.,dc=[1.,.5,0.,0.],vss
+  real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
+  real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns
+  real :: phimax=.2,phi=.1,xmax=9.8
+  character*30 string,argument
+  real :: vh=0.,Te=1.,denave,vh0,Fvh0,dFdx0,vhmin=-4.9,vhmax=4.9
+  integer :: index,nc=2,ns=1,pfint=0
+  logical :: local=.false.,lcd=.true.,ltestnofx=.false.
 contains
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine parseAsymargs
+    ig=1
+    do ia=1,iargc()
+       call getarg(ia,argument)
+       if(argument(1:2).eq.'-p')read(argument(3:),*)phimax
+       if(argument(1:2).eq.'-e')read(argument(3:),*)phi
+       if(argument(1:2).eq.'-g'.and.ig.le.ncmax)then
+          nc=ig
+          read(argument(3:),*,end=101)vs(ig),vt(ig),dc(ig)
+101       ig=ig+1
+       endif
+       if(argument(1:2).eq.'-T')read(argument(3:),*)Te
+       if(argument(1:2).eq.'-s')read(argument(3:),*)ns
+       if(argument(1:2).eq.'-f')ltestnofx=.true.
+       if(argument(1:2).eq.'-h')goto 120
+       if(argument(1:2).eq.'-v')read(argument(3:),*,end=102)vhmin,vhmax
+       if(argument(1:2).eq.'-w')then
+          read(argument(3:),*,end=102)pfint
+          call pfset(pfint)
+       endif
+102    continue
+    enddo
+    return
+120 write(*,*)'Usage: AsymHill [-p<phimax> -g<vshift>,<vthermal>,<density> ...'
+    write(*,*)' -g...  Enter Maxwellian parameters, starting at first. Currently:'
+    write(*,'(''   '',$)')
+    write(*,11)(i,' [',vs(i),vt(i),dc(i),']',i=1,nc)
+    write(*,'(a,f6.3)')'  -p...  Set peak potential             [',phimax
+    write(*,'(a,f6.3)')'  -e...  Set test potential             [',phi
+    write(*,'(a,f6.3)')'  -T...  Set electron temperature       [',Te
+    write(*,'(a,i4)'  )'  -s...  Set number of shifts in scan   [',ns
+    write(*,'(a,l4)'  )'  -f...  Display f(v) etc               [',ltestnofx
+    write(*,'(a,l4)'  )'  -w...  Postscript write (0,3,-3)      [',pfint
+    write(*,'(a,2f6.2)')'  -v...  Set vh range                   [',vhmin,vhmax
+    call exit
+11  format(i2,a,3f6.3,a,i2,a,3f6.3,a,i2,a,3f6.3,a)
+  end subroutine parseAsymargs
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine testfvhill(phimax,delphi,phi)
+  subroutine testfvhill(delphi)
   call multiframe(4,1,1)
   call dcharsize(.02,.02)
   do isigma=-1,1,2
@@ -33,10 +75,9 @@ contains
   call pltend
 end subroutine testfvhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine finddenofx(phimax,delphi)
+subroutine finddenofx(delphi)
 ! Integrate over the potential hill to find the density, force, and
 ! delF/delx (arrays of x), for the current vh and other parameters. 
-  xmax=10.
   deninteg=0.
   dFdelx=0.
   do i=1,npts
@@ -77,7 +118,9 @@ subroutine plotdenofx
   call axlabels('','n!di!d(x)')
   call winset(.true.)
   call color(4)
-  call polyline(x,denave*exp(phiofx/Te),npts)
+!  call polyline(x,denave*exp(phiofx/Te),npts)
+  call polymark([x(1),x(npts)], &
+       denave*[exp(phiofx(1)/Te),exp(phiofx(npts)/Te)],2,1)
   call color(15)
   call autoplot(x,deninteg,npts)
   call axis2
@@ -87,13 +130,80 @@ subroutine plotdenofx
   call multiframe(0,0,0)
 end subroutine plotdenofx
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine finddelphi(phimax,delphi)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine plotex
+  call multiframe(4,1,1)
+  call minmax(phiofx,npts,pmin,pmax)
+
+  call pltinit(-10.,10.,pmin*2.,pmax*1.4)
+  call legendline(.95,.1,258,'(a)')
+  call axis
+  call axptset(1.,0.);call ticrev();call altyaxis(1.,1.0);call color(1)
+  call axlabels('','Ion Energy');call axptset(0.,0.);call ticrev()
+  call polyline([-9.,-9.],[pmin,pmax],2)
+  call polyline([-9.2,-8.8],[pmax,pmax],2)
+  call jdrwstr(wx2nx(-9.),wy2ny(pmin)+.05,'Reflected!A_!@',1.05)
+  call polyline([9.,9.],[phiofx(npts),pmax],2)
+  call polyline([9.2,8.8],[pmax,pmax],2)
+  call jdrwstr(wx2nx(9.),wy2ny(phiofx(npts))+.04,'!A^!@Reflected',-1.05)
+  call polyline([0.,0.],[pmax,pmax*1.4],2)
+  call jdrwstr(wx2nx(.2),wy2ny(pmax)+.02,'Passing!A^_!@',1.)
+  call color(15)
+  call polyline(x,phiofx,npts)
+  call polyline([x(1),x(npts)],[0.,0.],2)
+  call axlabels('','!Af!@(x)')
+  
+  call pltinit(-10.,10.,-pmax*1.1,pmax)
+  call legendline(.95,.1,258,'(b)')
+  call axis
+  call axptset(1.,0.);call ticrev();call altyaxis(1.,1.0);call color(4)
+  call axlabels('','Electron Energy');call axptset(0.,0.);call ticrev()
+  call polyline([-9.,-9.],[-pmin,pmax],2)
+  call jdrwstr(wx2nx(-9.),wy2ny(pmin)+.05,'Passing!A^_!@',1.05)
+  call polyline([0.,0.],[-pmax,-phiofx(npts)],2)
+  call jdrwstr(wx2nx(0.),wy2ny(-pmax+.04),'Trapped!A^!@ ',-1.0)
+  call drcstr(' !A_!@')
+  call polyline([-.2,.2],[-phiofx(npts),-phiofx(npts)],2)
+  call polyline([9.,9.],[-phiofx(npts),-pmin],2)
+  call jdrwstr(wx2nx(9.),wy2ny(-phiofx(npts))+.01,'!A^!@Reflected',-1.05)
+  call polyline([9.2,8.8],[-pmin,-pmin],2)
+  call color(15)
+  call polyline(x,-phiofx,npts)
+  call polyline([x(1),x(npts)],[0.,0.],2)
+  call axlabels('','-!Af!@(x)')
+
+  call autoinit(x,denofx,npts)
+  call axis
+  call legendline(.95,.1,258,'(c)')
+  call color(1)
+  call polyline(x,denofx,npts)
+  call axlabels('','n!di!d(x)')
+  call color(15)
+  call polyline([x(1),x(npts)],[denave,denave],2)
+  call axptset(1.,0.);call ticrev();call altyaxis(1.,1.0);call color(4)
+  call axlabels('','n!de!d(!A+;!@) !A1!@');call axptset(0.,0.);call ticrev()
+  call polymark([x(1),x(npts)], &
+       denave*[exp(phiofx(1)/Te),exp(phiofx(npts)/Te)],2,1)
+  call color(15)
+!  call polyline(x,denave*exp(phiofx/Te),npts)
+
+  call autoplot(x,deninteg,npts)
+  call legendline(.95,.1,258,'(d)')    
+  call axptset(1.,0.);call ticrev();call altyaxis(1.,1.0);call color(1)
+  call axptset(0.,0.);call ticrev()
+  call axlabels('x','!AJ!@n!di!dd!Af!@')
+  call polyline([x(1),x(npts)],[0.,0.],2)
+  call pltend
+  call multiframe(0,0,0)
+end subroutine plotex
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine finddelphi(delphi)
 ! Iterate to find delphi consistent with specified ion distributions.
 ! But prevent |delphi| from exceeding 2*phimax because that's improper
   real, dimension(2) :: deninf
   if(lcd)write(*,*)'j   delphi      dpp   delphi-dpp   n(-)      n(+)'
   dpp=delphi
-  do j=1,7
+  do j=1,10
      do i=1,2
         isigma=-3+2*i
         phiinf=isigma*delphi/2.
@@ -101,7 +211,6 @@ subroutine finddelphi(phimax,delphi)
              nofv,vofv,fofv,Pfofv)
         deninf(i)=Pfofv(nofv)
      enddo
-     denave=(deninf(1)+deninf(2))/2.
 !     delphi=delphi+(1-.5/j)*(alog(deninf(2)/deninf(1))-delphi/Te)
      delphi=delphi+(1-.5/j)*(alog(deninf(2)/deninf(1))*min(1.,Te)-delphi/max(1.,Te))
      if(lcd)write(*,'(i2,5f10.5)')j,delphi,dpp,delphi-dpp,deninf
@@ -113,10 +222,11 @@ subroutine finddelphi(phimax,delphi)
      if(abs(delphi-dpp).lt.1.e-4)exit
      dpp=delphi
   enddo
+  denave=deninf(1)*exp(0.5*delphi/Te)
 !delphi=0.
 end subroutine finddelphi
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine scanvh(vhmin,vhmax,index,phimax,delphi)
+subroutine scanvh(index,delphi)
 ! Scan vhmin to vhmax to construct arrays of F and delF/delx
 ! Return the highest index of vh at which F crosses from + to -.
   Fprior=0.
@@ -131,9 +241,9 @@ subroutine scanvh(vhmin,vhmax,index,phimax,delphi)
      enddo
      vha(i)=vh
      lcd=.false.
-     call finddelphi(phimax,delphi)
+     call finddelphi(delphi)
      dphivh(i)=delphi
-     call finddenofx(phimax,delphi)
+     call finddenofx(delphi)
      Force=-deninteg(npts)+denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
      if(Fprior.gt.0.and.Force.le.0.)index=i
      Forcevh(i)=Force
@@ -144,7 +254,7 @@ end subroutine scanvh
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine initvofv
 ! Initialize velocity range using current vh as maximal.
-  vmax=4.5+max(abs(maxval(vs)-vh),abs(minval(vs)-vh))
+  vmax=4.4+max(abs(maxval(vs)-vh),abs(minval(vs)-vh))
   do i=1,nofv
      vofv(i)=-vmax+2.*vmax*(i-1.)/(nofv-1.)
   enddo
@@ -154,8 +264,6 @@ subroutine timenofx
 ! This routine takes 8 seconds for 1M densities, when npts=400.
   if(nc.eq.2)dc(2)=.5
   if(nc.eq.2)vs(nc)=-vs(1)
-  phimax=.2
-  xmax=10.
   ncycle=2500
   call initvofv
   write(*,*)'Timing routine starting'
@@ -173,6 +281,74 @@ subroutine timenofx
   write(*,'(a,i5,a,i5,a,i8,a)')'Found denofx for',npts,' points a total of '&
        ,ncycle,' times: ',npts*ncycle,' densities'
 end subroutine timenofx
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine forcedivplot
+  call multiframe(2,1,0)
+  call dcharsize(.02,.02)
+  call autoplot(vha,fofvh,nvh)
+  call axlabels('','f!d!A;!@!d(v!d!A;!@!d)')
+  call axis2
+  if(dFdx0.lt.0)call polymark(vh0,Fvh0,1,10)
+   ! Electron force
+  call autoplot(vha,denave*Te*(exp(dphivh/(2.*Te))-exp(-dphivh/(2.*Te))),nvh)
+  call axlabels('v!d!A;!@!d or v!dh!d','Forces(v!dh!d)')
+  call axis2
+  call legendline(.05,.8,0,'F!de!d')
+  call winset(.true.)
+  call polyline([vha(1),vha(nvh)],[0.,0.],2)
+  if(index.ne.0)call polyline([vh0,vh0],[-10.,10.],2)
+  call color(1)
+  call polyline(vha,Forcevh,nvh)      ! Total force
+  call legendline(.05,.7,0,'F!di!d+F!de!d')
+  call color(2)
+  call polyline(vha,-denave*dphivh/Te+Forcevh,nvh)   ! Ion force
+  call legendline(.05,.9,0,'F!di!d')
+  call pltend
+  call multiframe(0,0,0)
+end subroutine forcedivplot
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine forceplotns
+  call multiframe(3,1,1)
+  call dcharsize(.02,.02)
+  call minmax(fvvhns(1,1),nvh,symin,symax)
+  call pltinit(vhmin,vhmax,symin,symax*1.1)
+  call axis
+  call axis2
+  call axlabels('','f!d!A;!@!d(v!d!A;!@!d)')
+  do i=1,ns
+     call color(i)
+     call polyline(vha,fvvhns(1,i),nvh)
+     if(dF0ns(i).lt.0)call polymark(vh0ns(i),fv0ns(i),1,10)
+  enddo
+  call color(15)
+  call minmax(Fcvhns(1,1),nvh,symin,symax)
+  call pltinit(vhmin,vhmax,symin*1.1,symax*1.1)
+  call axis
+  call axis2
+  call axlabels('','F(v!dh!d)')  
+  call polyline([vha(1),vha(nvh)],[0.,0.],2)
+!  call legendline(.05,.7,0,'F!di!d+F!de!d')
+  do i=1,ns
+     call color(i)
+     call polyline(vha,Fcvhns(1,i),nvh)      ! Total force
+     if(dF0ns(i).lt.0)call polymark(vh0ns(i),0,1,10)
+  enddo
+  call color(15)
+  call minmax(dFvhns(1,1),nvh,symin,symax)
+  call pltinit(vhmin,vhmax,symin*1.1,symax*1.1)
+  call axis
+  call axis2
+  call axlabels('v!dh!d  or  v!d!A;!@!d','!Ad!@F/!Ad!@x(v!dh!d)')  
+  call polyline([vha(1),vha(nvh)],[0.,0.],2)
+  do i=1,ns
+     call color(i)
+     call polyline(vha,dFvhns(1,i),nvh)      ! Total force
+     if(dF0ns(i).lt.0)call polymark(vh0ns(i),dF0ns(i),1,10)
+  enddo
+  call pltend
+  call multiframe(0,0,0)  
+end subroutine forceplotns
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end module AsymHill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -262,60 +438,60 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
   enddo
 end subroutine fvhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Optional main for testing. 
+program Asym
 use AsymHill
-phimax=0.3
-phi=.1
-delphi=0.0
-vh=1.
+
+call parseAsymargs
 call initvofv
-call finddelphi(phimax,delphi)
-call testfvhill(phimax,delphi,phi)
-write(*,'(a,8f8.3)')'testnofx: vshift,vtherm,dens',vs,vt,dc
-call finddenofx(phimax,delphi)
-call plotdenofx
-vhmin=-5.;vhmax=+5
-index=2
-call scanvh(vhmin,vhmax,index,phimax,delphi)
-dFdx0=1.
-if(index.ne.0)then
-   write(*,*)'F=0 at index i     vh(i-1)        vh(i)         F(i-1)          F(i)'
-   write(*,*)index,vha(index-1),vha(index+1),Forcevh(index-1),Forcevh(index)
-   vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
-        (abs(Forcevh(index-1))+abs(Forcevh(index)))
-   fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
-        +fofvh(index)*abs(Forcevh(index-1)))/ &
-        (abs(Forcevh(index-1))+abs(Forcevh(index)))
-   dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
-        +delFdxvh(index)*abs(Forcevh(index-1)))/ &
-        (abs(Forcevh(index-1))+abs(Forcevh(index)))
-   write(*,*)'delF/dx=',delFdxvh(index-1),delFdxvh(index),dFdx0
-   vh=vh0
-   call finddenofx(phimax,delphi)
-   call plotdenofx
+
+if(ltestnofx)then
+   call finddelphi(delphi)
+   call testfvhill(delphi)
+   write(*,'(a,9f6.3)')'testnofx: vshift,vtherm,dens',(vs(i),vt(i),dc(i),i=1,nc)
+   call finddenofx(delphi)
+!   call plotdenofx
+   call plotex
 endif
-call multiframe(2,1,0)
-call autoplot(vha,fofvh,nvh)
-call axlabels('','f(v)')
-call axis2
-if(dFdx0.lt.0)call polymark(vh0,Fvh0,1,10)
-   ! Electron force
-call autoplot(vha,denave*Te*(exp(dphivh/(2.*Te))-exp(-dphivh/(2.*Te))),nvh)
-call axlabels('v or v!dh!d','Forces(v!dh!d)')
-call axis2
-call legendline(.05,.8,0,'F!de!d')
-call winset(.true.)
-call polyline([vha(1),vha(nvh)],[0.,0.],2)
-if(index.ne.0)call polyline([vh0,vh0],[-10.,10.],2)
-call color(1)
-call polyline(vha,Forcevh,nvh)      ! Total force
-call legendline(.05,.7,0,'F!di!d+F!de!d')
-call color(2)
-!call dashset(1)
-call polyline(vha,-denave*dphivh/Te+Forcevh,nvh)   ! Ion force
-call legendline(.05,.9,0,'F!di!d')
-call pltend
 
-
+vss=vs
+vsfac=1.
+if(ns.ge.3)vsfac=2.
+do i=1,ns
+   vs=vss*vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+   index=2
+   call scanvh(index,delphi)
+   Fcvhns(:,i)=Forcevh
+   dFvhns(:,i)=delFdxvh
+   fvvhns(:,i)=fofvh
+   dpvhns(:,i)=dphivh
+   dF0ns(i)=1. 
+   if(i.eq.1)write(*,*)&
+        'At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,   F=0  and dF/dv_h<0'
+   if(index.ne.0)then
+      vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
+           (abs(Forcevh(index-1))+abs(Forcevh(index)))
+      fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
+           +fofvh(index)*abs(Forcevh(index-1)))/ &
+           (abs(Forcevh(index-1))+abs(Forcevh(index)))
+      dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
+           +delFdxvh(index)*abs(Forcevh(index-1)))/ &
+           (abs(Forcevh(index-1))+abs(Forcevh(index)))
+      write(*,'(i4,5f8.4)')index,vha(index-1),vha(index+1),&
+           Forcevh(index-1),Forcevh(index),dFdx0
+      vh=vh0
+      dF0ns(i)=dFdx0
+      fv0ns(i)=fvh0
+      vh0ns(i)=vh0
+      vh=vh0
+      if(ns.lt.3)then
+!         write(*,*)'Calling finddenofx, plotdenofx',i,ns
+         call finddelphi(delphi)
+         call finddenofx(delphi)
+         call plotdenofx
+      endif
+   endif
+   if(ns.le.3)call forcedivplot
+enddo
+call forceplotns
 !call timenofx ! For timing comment the above.
-end program
+end program Asym
