@@ -8,9 +8,10 @@ module AsymHill
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns
   real :: delphi,phimax=.2,phi=.1,xmax=12.
   character*30 string,argument
-  real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.9,vhmax=4.9
+  real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.9,vhmax=4.9,vhn,vhx,vh0r
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
+  logical :: lrefinethreshold=.false.
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -122,6 +123,8 @@ end subroutine otherxofphi
        endif
 102    continue
     enddo
+    vhx=vhmax
+    vhn=vhmin
     return
 120 write(*,*)'Usage: AsymHill [-p<phimax> -g<vshift>,<vthermal>,<density> ...'
     write(*,*)' -g...  Enter Maxwellian parameters, starting at first. Currently:'
@@ -212,8 +215,8 @@ subroutine scanvh(index)
 ! Return the highest index of vh at which F crosses from + to -.
   index=0
   fofvh=0.
-  vhx=vhmax
   vhn=vhmin
+  vhx=vhmax
   vh1=0
   vh2=0
   do j=1,2            ! Iterate for refinement of vh0
@@ -237,11 +240,11 @@ subroutine scanvh(index)
            vh2=vh
         endif
         if(j.eq.1)then    ! Store coarse scan.
-           index=indexref
            vha(i)=vh
            dphivh(i)=delphi
            Forcevh(i)=Force
            delFdxvh(i)=dFdelx(npts)
+           if(dFdelx(npts).le.0.)index=indexref
            do k=1,nc             ! Store the finfty of vh.
               vt2x2=vt(k)**2*2.
               gcoef=1./sqrt(vt2x2*3.1415926)
@@ -468,6 +471,13 @@ subroutine forceplotns
      if(dF0ns(i).lt.0)call polymark(vh0ns(i),fv0ns(i),1,10)
   enddo
   call color(15)
+  if(lrefinethreshold)then
+     call polymark(vha,fvvhns(1:nvh,ns+1),nvh,4)
+     dsy=(symax-symin)/10.
+     call polyline([vh0ns(ns+1),vh0ns(ns+1)],&
+          [fv0ns(ns+1)+dsy,fv0ns(ns+1)-dsy],2)
+  endif
+  
   call minmax(Fcvhns(1:nvh,1)/phimax**2,nvh,symin,symax)
   call pltinit(vhmin,vhmax,symin*1.1,symax*1.1)
   call legendline(.9,.9,258,'(b)')
@@ -482,6 +492,12 @@ subroutine forceplotns
      if(dF0ns(i).lt.0)call polymark(vh0ns(i),0,1,10)
   enddo
   call color(15)
+  if(lrefinethreshold)then
+     call polymark(vha,Fcvhns(1:nvh,ns+1)/phimax**2,nvh,4)
+     dsy=(symax-symin)/10.
+     call polyline([vh0ns(ns+1),vh0ns(ns+1)],&
+          [dsy,-dsy],2)
+  endif
   call minmax(dFvhns(1:nvh,1)/phimax**2,nvh,symin,symax)
   call pltinit(vhmin,vhmax,symin*1.1,symax*1.1)
   call legendline(.9,.9,258,'(c)')
@@ -494,6 +510,13 @@ subroutine forceplotns
      call polyline(vha,dFvhns(1:nvh,i)/phimax**2,nvh)      ! Total force
      if(dF0ns(i).lt.0)call polymark(vh0ns(i),dF0ns(i)/phimax**2,1,10)
   enddo
+  call color(15)
+  if(lrefinethreshold)then
+  call polymark(vha,dFvhns(1:nvh,ns+1)/phimax**2,nvh,4)
+  dsy=(symax-symin)/10.
+  call polyline([vh0ns(ns+1),vh0ns(ns+1)],&
+       [dF0ns(ns+1)/phimax**2+dsy,dF0ns(ns+1)/phimax**2-dsy],2)
+  endif
   call pltend
   call multiframe(0,0,0)  
 end subroutine forceplotns
@@ -501,52 +524,119 @@ end subroutine forceplotns
 subroutine scanspacing
 ! Iterate scanvh calls over different spacings  
 ! If ns .eq. 1 or 2 report vh and do plots
-vss=vs
-vsfac=1.
-if(ns.ge.3)vsfac=2.
-do i=1,ns
-   vs=vss*vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
-   index=2
-   call scanvh(index)
-   Fcvhns(:,i)=Forcevh
-   dFvhns(:,i)=delFdxvh
-   fvvhns(:,i)=fofvh
-   dpvhns(:,i)=dphivh
-   dF0ns(i)=1. 
-   if(i.eq.1)write(*,*)&
-        'At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,  vh0  F=0 & dF/dv_h<0'
-   if(index.ne.0)then
+  vss=vs
+  vsfac=1.
+  if(ns.ge.3)vsfac=2.
+  do i=1,ns
+     vs=vss*vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+     call scanvh(index)
+     Fcvhns(:,i)=Forcevh
+     dFvhns(:,i)=delFdxvh
+     fvvhns(:,i)=fofvh
+     dpvhns(:,i)=dphivh
+     dF0ns(i)=1. 
+     if(i.eq.1)write(*,*)&
+          ' At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,  vh0',&
+          '    vs   F=0 & dF/dv_h<0'
+     if(index.ne.0)then
 ! vh0 is instead refined in scanvh
 !     vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
 !           (abs(Forcevh(index-1))+abs(Forcevh(index)))
-      fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
-           +fofvh(index)*abs(Forcevh(index-1)))/ &
-           (abs(Forcevh(index-1))+abs(Forcevh(index)))
-      dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
-           +delFdxvh(index)*abs(Forcevh(index-1)))/ &
-           (abs(Forcevh(index-1))+abs(Forcevh(index)))
-      write(*,'(i4,6f8.4)')index,vha(index-1),vha(index+1),&
-           Forcevh(index-1),Forcevh(index),dFdx0,vh0
-      dF0ns(i)=dFdx0
-      fv0ns(i)=fvh0
-      vh0ns(i)=vh0
-      vh=vh0
-      if(ns.lt.3)then
-         lcd=.true.
-         call finddelphi
-         write(*,*)'Found vh0, delphi',vh0,delphi,fvh0
-         call finddenofx
-         call plotdenofx
-         call findtrappedf
-         call otherxofphi
-      endif
-   else
-      write(*,*)'No stable equilibrium vh0 found for vs scaling ',&
-           vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
-   endif
-   if(ns.le.3)call forcedivplot
-enddo
+        fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
+             +fofvh(index)*abs(Forcevh(index-1)))/ &
+             (abs(Forcevh(index-1))+abs(Forcevh(index)))
+        dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
+             +delFdxvh(index)*abs(Forcevh(index-1)))/ &
+             (abs(Forcevh(index-1))+abs(Forcevh(index)))
+        write(*,'(i4,6f8.4)')index,vha(index-1),vha(index+1),&
+             Forcevh(index-1),Forcevh(index),dFdx0,vh0
+        dF0ns(i)=dFdx0
+        fv0ns(i)=fvh0
+        vh0ns(i)=vh0
+        vh=vh0
+        if(ns.lt.3)then
+           lcd=.true.
+           call finddelphi
+           write(*,*)'Found vh0, delphi',vh0,delphi,fvh0
+           call finddenofx
+           call plotdenofx
+           call findtrappedf
+           call otherxofphi
+        endif
+     else
+        write(*,'(a,a,f8.4)')'     No stable equilibrium found for vs scaling',&
+             '     ',vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+     endif
+     if(ns.le.3)call forcedivplot
+  enddo
+  if(lrefinethreshold)then  ! Refinement of threshold: 
+! Find vs1fac and vs2fac bracketting threshold
+  vhminst=vhmin
+  vhmaxst=vhmax
+  if(ns.gt.2)then
+     do i=1,ns
+        if(dF0ns(i).ge.0)then
+           vs1fac=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+        elseif(vs1fac.ne.0.)then
+           vs2fac=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+           goto 2
+        else
+           write(*,*)'ERROR: dF0ns negative before positive',dF0ns(i)
+        endif
+     enddo
+     write(*,*)'Failed to bracket vsfacs:',vs1fac,vs2fac
+     return
+2    continue
+     write(*,*)'Refining vshift threshold'
+     vh0=vh0ns(i)
+     vs1fac=0.
+     dvh=(vhmax-vhmin)/5.
+     vhmin=vh0-dvh
+     vhmax=vh0+dvh
+     do i=1,ns
+        call bisectspacing(vs1fac,vs2fac)
+!        write(*,'(a,5f8.3)')'vh0,vs1fac,vs2fac',vh0,vs1fac,vs2fac,vhmin,vhmax
+!        if(dFdx0.gt.0)exit   ! Don't force the refinement too much.
+     enddo
+     vh0r=vh0
+     dF0ns(ns+1)=dFdx0
+     vh0ns(ns+1)=vh0r
+     vhmin=vhminst
+     vhmax=vhmaxst
+     call scanvh(index) ! Needed to reset various arrays to vhmin/max
+     Fcvhns(:,ns+1)=Forcevh     ! Set the profiles etc. for refined soln.
+     dFvhns(:,ns+1)=delFdxvh
+     fvvhns(:,ns+1)=fofvh
+     dpvhns(:,ns+1)=dphivh
+     vh0ns(ns+1)=vh0r
+     fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
+          +fofvh(index)*abs(Forcevh(index-1)))/ &
+          (abs(Forcevh(index-1))+abs(Forcevh(index)))
+     fv0ns(ns+1)=fvh0
+  endif
+  endif ! Refinement
 end subroutine scanspacing
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine bisectspacing(vs1fac,vs2fac)
+! Given vs1 and vs2 spacing factors that are below and above the 
+! stability threshold, bisect to refine the threshold estimate.
+  vs3fac=(vs1fac+vs2fac)/2.
+  vs=vss*vs3fac
+  call scanvh(index)   ! Sets the vh0
+  dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
+       +delFdxvh(index)*abs(Forcevh(index-1)))/ &
+       (abs(Forcevh(index-1))+abs(Forcevh(index)))
+  if(index.ne.0.and.dFdx0.le.0.)then
+     vs2fac=vs3fac
+     dvh=(vhmax-vhmin)/1.
+     vhmin=vh0-dvh/2.
+     vhmax=vh0+dvh/2.
+     write(*,'(i4,7f8.4)')index,vha(index-1),vha(index+1),&
+          Forcevh(index-1),Forcevh(index),dFdx0,vh0,vs3fac
+  else
+     vs1fac=vs3fac
+  endif
+end subroutine bisectspacing
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end module AsymHill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
