@@ -5,13 +5,13 @@ module AsymHill
   real, dimension(nvh) :: vha,Forcevh,delFdxvh,dphivh,fofvh
   real, dimension(ncmax) :: vs=[1.5,-1.5,0.,0.],vt=1.,dc=[1.,.5,0.,0.],vss
   real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
-  real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns
+  real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns,delphins
   real :: delphi,phimax=.2,phi=.1,xmax=12.
   character*30 string,argument
   real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.9,vhmax=4.9,vhn,vhx,vh0r
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
-  logical :: lrefinethreshold=.false.
+  logical :: lrefinethreshold=.true.
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -528,7 +528,8 @@ subroutine scanspacing
   vsfac=1.
   if(ns.ge.3)vsfac=2.
   do i=1,ns
-     vs=vss*vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+     vsfaci=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+     vs=vss*vsfaci
      call scanvh(index)
      Fcvhns(:,i)=Forcevh
      dFvhns(:,i)=delFdxvh
@@ -537,7 +538,7 @@ subroutine scanspacing
      dF0ns(i)=1. 
      if(i.eq.1)write(*,*)&
           ' At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,  vh0',&
-          '    vs   F=0 & dF/dv_h<0'
+          '   vshift    Delphi'
      if(index.ne.0)then
 ! vh0 is instead refined in scanvh
 !     vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
@@ -548,16 +549,18 @@ subroutine scanspacing
         dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
              +delFdxvh(index)*abs(Forcevh(index-1)))/ &
              (abs(Forcevh(index-1))+abs(Forcevh(index)))
-        write(*,'(i4,6f8.4)')index,vha(index-1),vha(index+1),&
-             Forcevh(index-1),Forcevh(index),dFdx0,vh0
         dF0ns(i)=dFdx0
         fv0ns(i)=fvh0
         vh0ns(i)=vh0
         vh=vh0
+!        lcd=.true.
+        call finddelphi
+!        lcd=.false.
+        write(*,'(i4,7f8.4,e11.3)')index,vha(index-1),vha(index+1),&
+             Forcevh(index-1),Forcevh(index),dFdx0,vh0,vs(1),delphi
+        delphins(i)=delphi
         if(ns.lt.3)then
            lcd=.true.
-           call finddelphi
-           write(*,*)'Found vh0, delphi',vh0,delphi,fvh0
            call finddenofx
            call plotdenofx
            call findtrappedf
