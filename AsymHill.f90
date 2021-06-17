@@ -694,6 +694,76 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
   endif
   Pfofv=0.
   fofv=0.
+  vdiffm=vofv(1)
+  fim=0.
+  pam=0.
+  pa=0.
+  sqtwopi=sqrt(2.*3.1415926)
+  do i=1,nofv
+     vsign=sign(1.,vofv(i))
+     vdiff=vofv(i)-vthresh
+     enx2=phix2+vofv(i)**2
+     if(int(vsign).ne.isigma)then              ! Moving inward
+        vinf=vsign*sqrt(max(0.,enx2))
+     elseif((phix2+vofv(i)**2).gt.phimx2)then  ! Passing
+        vinf=vsign*sqrt(max(0.,delphix2+enx2))
+     else                                      ! Reflected
+        vinf=-vsign*sqrt(max(0.,enx2))
+     endif
+     fi=0.
+     do j=1,nc   ! f(v)=finf(vinf)
+        fi=fi+dc(j)*exp(-0.5*(vinf-vs(j))**2/vt(j)**2)/(vt(j)*sqtwopi)
+     enddo
+!     if(enx2.lt.0)fi=0.    ! Zero f at negative energy??
+     fofv(i)=fi
+     if(vdiffm*vdiff.le.0.)then
+! Crossing threshold at which the discontinuity in f occurs, which is
+! where v=isigma*sqrt(phimx2-phix2), i.e. vdiff=0; to correctly integrate:
+        pa=pam+ (abs(vdiffm)*fim+abs(vdiff)*fi) &
+             /(abs(vdiffm)+abs(vdiff))*(vofv(i)-vofv(i-1))
+     else
+        if(i.gt.1)pa=pam+0.5*(fi+fim)*(vofv(i)-vofv(i-1))
+     endif
+     Pfofv(i)=Pfofv(i)+pa
+     pam=pa
+     vdiffm=vdiff
+     fim=fi
+  enddo
+end subroutine fvhill
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine fvhill1(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
+     nofv,vofv,fofv,Pfofv)
+  real :: dc(nc),vs(nc),vt(nc),phimax,phi,delphi
+  integer :: isigma, nofv
+  real, dimension(nofv) :: vofv, fofv, Pfofv
+  logical :: local
+  
+  if(isigma.ne.1.and.isigma.ne.-1)stop 'isigma must be +-1'
+! Decide the meaning of f(v) when delphi !=0.  
+  if(local)then ! f(v) is relative to different phi_infty
+     phix2=2.*(phi    -isigma*delphi/2.)  ! 2*(phi   -phiinf)
+     phimx2=2.*(phimax-isigma*delphi/2.)  ! 2*(phimax-phiinf)
+     delphix2=2.*isigma*delphi  
+     if(phix2.lt.0)then
+        write(*,*)'Impossible phi (<phiinf)',phi,isigma,delphi
+        stop
+     endif
+  else           ! f(v)= f( sigma*sqrt(v^2+2*phi) )
+     phix2=2.*phi
+     phimx2=2.*phimax
+     delphix2=0.
+  endif
+  if(phimax-phi.lt.-1.e-6)then
+     write(*,*)'Normally phi must be < phimax',phi,phimax
+     vthresh=0.
+  elseif(phimx2.lt.0)then
+     write(*,*)'No Potential peak this side',isigma,phimx2
+     vthresh=0.
+  else
+     vthresh=isigma*sqrt(phimx2-phix2)
+  endif
+  Pfofv=0.
+  fofv=0.
   do j=1,nc
      vt2x2=vt(j)**2*2.
      gcoef=1./sqrt(vt2x2*3.1415926)
@@ -727,7 +797,7 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
         fim=fi
      enddo
   enddo
-end subroutine fvhill
+end subroutine fvhill1
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Return the ion density at a potential phiminf relative to phiinf on
 ! the side isigma. To be called by BGKint.
@@ -738,6 +808,7 @@ real function denionhill(phiminf)
         nofv,vofv,fofv,Pfofv)
    denionhill=Pfofv(nofv)  
 end function denionhill
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 program Asym
 use AsymHill
