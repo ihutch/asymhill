@@ -8,7 +8,7 @@ module AsymHill
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns,delphins
   real :: delphi,phimax=.2,phi=.1,xmax=12.
   character*30 string,argument
-  real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.9,vhmax=4.9,vhn,vhx,vh0r
+  real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.,vhmax=4.,vhn,vhx,vh0r
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
   logical :: lrefinethreshold=.true.
@@ -125,6 +125,7 @@ end subroutine otherxofphi
     enddo
     vhx=vhmax
     vhn=vhmin
+    if(ns.lt.3)lrefinethreshold=.false.
     return
 120 write(*,*)'Usage: AsymHill [-p<phimax> -g<vshift>,<vthermal>,<density> ...'
     write(*,*)' -g...  Enter Maxwellian parameters, starting at first. Currently:'
@@ -215,12 +216,14 @@ subroutine scanvh(index)
 ! Return the highest index of vh at which F crosses from + to -.
   index=0
   fofvh=0.
+  vssize=maxval(vt)
   vhn=vhmin
   vhx=vhmax
   vh1=0
   vh2=0
   do j=1,2            ! Iterate for refinement of vh0
      Force=0.
+     Fmax=0.
      vh=vhn
      indexref=0
      do i=1,nvh          ! Scan over the current range
@@ -232,7 +235,8 @@ subroutine scanvh(index)
         call finddenofx
         Force=-deninteg(npts) &
              +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
-        if(Fprior.gt.0.and.Force.le.0..and.indexref.eq.0)then
+        if(abs(vh).lt.abs(vs(1))+vssize &
+             .and.Fprior.gt.0.and.Force.lt.0..and.indexref.eq.0)then
            indexref=i
            vh0=(vhprior*abs(Force)+vh*abs(Fprior))/ &
                 (abs(Fprior)+abs(Force))
@@ -528,7 +532,7 @@ subroutine scanspacing
   vsfac=1.
   if(ns.ge.3)vsfac=2.
   do i=1,ns
-     vsfaci=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+     vsfaci=vsfac*(i-min(1.,ns-1.))/(ns-min(1.,ns-1.))
      vs=vss*vsfaci
      call scanvh(index)
      Fcvhns(:,i)=Forcevh
@@ -538,7 +542,7 @@ subroutine scanspacing
      dF0ns(i)=1. 
      if(i.eq.1)write(*,*)&
           ' At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,  vh0',&
-          '   vshift    Delphi'
+          '   vshift  Delphi/psi^2'
      if(index.ne.0)then
 ! vh0 is instead refined in scanvh
 !     vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
@@ -556,8 +560,9 @@ subroutine scanspacing
 !        lcd=.true.
         call finddelphi
 !        lcd=.false.
-        write(*,'(i4,7f8.4,e11.3)')index,vha(index-1),vha(index+1),&
-             Forcevh(index-1),Forcevh(index),dFdx0,vh0,vs(1),delphi
+        write(*,'(i4,7f8.4,f9.5)')index,vha(index-1),vha(index+1),&
+             Forcevh(index-1)/phimax**2,Forcevh(index)/phimax**2, &
+             dFdx0/phimax**2,vh0,vs(1),delphi/phimax**2
         delphins(i)=delphi
         if(ns.lt.3)then
            lcd=.true.
@@ -567,8 +572,8 @@ subroutine scanspacing
            call otherxofphi
         endif
      else
-        write(*,'(a,a,f8.4)')'     No stable equilibrium found for vs scaling',&
-             '     ',vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+        write(*,'(a,a,f8.4)')'     No stable equilibrium found for vs(1)=    ',&
+             '     ',vs(1)
      endif
      if(ns.le.3)call forcedivplot
   enddo
@@ -598,8 +603,6 @@ subroutine scanspacing
      vhmax=vh0+dvh
      do i=1,ns
         call bisectspacing(vs1fac,vs2fac)
-!        write(*,'(a,5f8.3)')'vh0,vs1fac,vs2fac',vh0,vs1fac,vs2fac,vhmin,vhmax
-!        if(dFdx0.gt.0)exit   ! Don't force the refinement too much.
      enddo
      vh0r=vh0
      dF0ns(ns+1)=dFdx0
@@ -634,8 +637,11 @@ subroutine bisectspacing(vs1fac,vs2fac)
      dvh=(vhmax-vhmin)/1.
      vhmin=vh0-dvh/2.
      vhmax=vh0+dvh/2.
-     write(*,'(i4,7f8.4)')index,vha(index-1),vha(index+1),&
-          Forcevh(index-1),Forcevh(index),dFdx0,vh0,vs3fac
+     vh=vh0 
+     call finddelphi  ! For the print out:
+     write(*,'(i4,7f8.4,f9.5)')index,vha(index-1),vha(index+1),&
+          Forcevh(index-1)/phimax**2,Forcevh(index)/phimax**2, &
+             dFdx0/phimax**2,vh0,vs(1),delphi/phimax**2
   else
      vs1fac=vs3fac
   endif
@@ -690,7 +696,7 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
      write(*,*)'No Potential peak this side',isigma,phimx2
      vthresh=0.
   else
-     vthresh=isigma*sqrt(phimx2-phix2)
+     vthresh=isigma*sqrt(max(0.,phimx2-phix2)) ! prevent rounding NANs.
   endif
   Pfofv=0.
   fofv=0.
@@ -716,88 +722,27 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
      enddo
 !     if(enx2.lt.0)fi=0.    ! Zero f at negative energy??
      fofv(i)=fi
-     if(vdiffm*vdiff.le.0.)then
+!     if(vdiffm*vdiff.le.0.)then
 ! Crossing threshold at which the discontinuity in f occurs, which is
 ! where v=isigma*sqrt(phimx2-phix2), i.e. vdiff=0; to correctly integrate:
-        pa=pam+ (abs(vdiffm)*fim+abs(vdiff)*fi) &
+        if(i.gt.1)pa=pam+ (abs(vdiffm)*fim+abs(vdiff)*fi) &
              /(abs(vdiffm)+abs(vdiff))*(vofv(i)-vofv(i-1))
-     else
-        if(i.gt.1)pa=pam+0.5*(fi+fim)*(vofv(i)-vofv(i-1))
-     endif
+! Actually using this interpolation always smooths ftrapped glitches.
+! But I am not 100% certain it is always justified.
+!        if(.not.(abs(pam).ge.0.))then
+!           write(*,*)'fvhiil Nan',vdiff,vdiffm,fi,fim,vofv(i),vofv(i-1),&
+!                i,vthresh,phi,phimax
+!           stop
+!        endif
+!     else
+!        if(i.gt.1)pa=pam+0.5*(fi+fim)*(vofv(i)-vofv(i-1))
+!     endif
      Pfofv(i)=Pfofv(i)+pa
      pam=pa
      vdiffm=vdiff
      fim=fi
   enddo
 end subroutine fvhill
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine fvhill1(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
-     nofv,vofv,fofv,Pfofv)
-  real :: dc(nc),vs(nc),vt(nc),phimax,phi,delphi
-  integer :: isigma, nofv
-  real, dimension(nofv) :: vofv, fofv, Pfofv
-  logical :: local
-  
-  if(isigma.ne.1.and.isigma.ne.-1)stop 'isigma must be +-1'
-! Decide the meaning of f(v) when delphi !=0.  
-  if(local)then ! f(v) is relative to different phi_infty
-     phix2=2.*(phi    -isigma*delphi/2.)  ! 2*(phi   -phiinf)
-     phimx2=2.*(phimax-isigma*delphi/2.)  ! 2*(phimax-phiinf)
-     delphix2=2.*isigma*delphi  
-     if(phix2.lt.0)then
-        write(*,*)'Impossible phi (<phiinf)',phi,isigma,delphi
-        stop
-     endif
-  else           ! f(v)= f( sigma*sqrt(v^2+2*phi) )
-     phix2=2.*phi
-     phimx2=2.*phimax
-     delphix2=0.
-  endif
-  if(phimax-phi.lt.-1.e-6)then
-     write(*,*)'Normally phi must be < phimax',phi,phimax
-     vthresh=0.
-  elseif(phimx2.lt.0)then
-     write(*,*)'No Potential peak this side',isigma,phimx2
-     vthresh=0.
-  else
-     vthresh=isigma*sqrt(phimx2-phix2)
-  endif
-  Pfofv=0.
-  fofv=0.
-  do j=1,nc
-     vt2x2=vt(j)**2*2.
-     gcoef=1./sqrt(vt2x2*3.1415926)
-     vdiffm=vofv(1)
-     fim=0.
-     pam=0.
-     pa=0.
-     do i=1,nofv
-        vsign=sign(1.,vofv(i))
-        vdiff=vofv(i)-vthresh
-        if(int(vsign).ne.isigma)then              ! Moving inward
-           vinf=vsign*sqrt(max(0.,phix2+vofv(i)**2))
-        elseif((phix2+vofv(i)**2).gt.phimx2)then  ! Passing
-           vinf=vsign*sqrt(max(0.,phix2+delphix2+vofv(i)**2))
-        else                                      ! Reflected
-           vinf=-vsign*sqrt(max(0.,phix2+vofv(i)**2))
-        endif
-        fi=gcoef*exp(-(vinf-vs(j))**2/vt2x2)   ! f(v)=finf(vinf)
-        fofv(i)=fofv(i)+dc(j)*fi
-        if(vdiffm*vdiff.le.0.)then
-! Crossing threshold at which the discontinuity in f occurs, which is
-! where v=isigma*sqrt(phimx2-phix2), i.e. vdiff=0; to correctly integrate:
-           pa=pam+ dc(j)*(abs(vdiffm)*fim+abs(vdiff)*fi) &
-                /(abs(vdiffm)+abs(vdiff))*(vofv(i)-vofv(i-1))
-        else
-           if(i.gt.1)pa=pam+dc(j)*0.5*(fi+fim)*(vofv(i)-vofv(i-1))
-        endif
-        Pfofv(i)=Pfofv(i)+pa
-        pam=pa
-        vdiffm=vdiff
-        fim=fi
-     enddo
-  enddo
-end subroutine fvhill1
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Return the ion density at a potential phiminf relative to phiinf on
 ! the side isigma. To be called by BGKint.
