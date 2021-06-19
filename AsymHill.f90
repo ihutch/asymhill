@@ -11,7 +11,7 @@ module AsymHill
   real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.,vhmax=4.,vhn,vhx,vh0r
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
-  logical :: lrefinethreshold=.true.
+  logical :: lrefinethreshold=.true.,lfdconv
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -154,10 +154,10 @@ subroutine finddenofx
      xcor=x(i)/4.
 !     xcor=x(i)/4./sqrt(1.-dph/phimax)  !Symmetrizes curvature at origin.
      phiofx(i)=(phimax-dph)/cosh(xcor)**4+dph
-     if(phiofx(i).gt.phimax)then
-        write(*,*)'phi>phimax',phiofx(i),phimax,delphi,i,dph,xcor
-        stop
-     endif
+!     if(phiofx(i).gt.phimax)then
+!        write(*,*)'phi>phimax',phiofx(i),phimax,delphi,i,dph,xcor
+!        stop
+!     endif
      call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiofx(i),isigma,local, &
           nofv,vofv,fofv,Pfofv)
      denofx(i)=Pfofv(nofv)
@@ -173,13 +173,16 @@ end subroutine finddenofx
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine finddelphi
 ! Iterate to find delphi consistent with specified ion distributions.
-! But prevent |delphi| from exceeding 2*phimax because that's improper
   real, dimension(2) :: deninf
+  integer, parameter :: niter=10
+  real, dimension(niter) :: residit
   if(lcd)write(*,*)'j   dpp       delphi      delphi-dpp    n(-)        n(+)',&
        '   resid'
+  lfdconv=.false.
   dpp=delphi
+  ddp=0.
   residp=0.
-  do j=1,10
+  do j=1,niter
      do i=1,2
         isigma=-3+2*i
         phiinf=isigma*delphi/2.
@@ -188,25 +191,35 @@ subroutine finddelphi
         deninf(i)=Pfofv(nofv)
      enddo
      resid=(alog(deninf(2)/deninf(1))-delphi/Te)
+     residit(j)=resid
      if(j.eq.1)then
-!        delphi=delphi+(1-.5/j)*(alog(deninf(2)/deninf(1))*min(1.,Te)-delphi/max(1.,Te))
         delphi=delphi+.5*resid*min(1.,Te)
      else
-        ddp=resid*(delphi-dpp)/(resid-residp)
+        if((resid-residp).eq.0)then
+           write(*,*)'resid unchanged',resid,delphi,j
+        else
+           ddp=resid*(delphi-dpp)/(resid-residp)
+        endif
         dpp=delphi
 !        delphi=delphi-ddp
         delphi=delphi-sign(min(abs(ddp),phimax/2.),ddp)
      endif
      if(lcd)write(*,'(i2,6f11.7)')j,dpp,delphi,delphi-dpp,deninf,resid
-     if(abs(resid).lt.1.e-6)exit
-     if(abs(delphi).gt.2.*phimax)then  !Prevent improper delphi
-        write(*,*)'WARNING: Improper delphi suppressed',delphi,phimax
-        delphi=sign(2.*phimax,delphi)
-!        delphi=delphi+.8*ddp
-        exit
+     if(abs(resid).lt.1.e-6)then
+        lfdconv=.true.
+        goto 2
      endif
+!     if(abs(delphi).gt.2.*phimax)then  !Prevent improper delphi
+!        write(*,'(a,f9.4)')'              WARNING: Improper delphi. vh=',vh
+!        delphi=sign(2.*phimax,delphi)
+!        delphi=delphi+.8*ddp
+!        exit
+!     endif
      residp=resid
   enddo
+  write(*,'(a,7f10.5)')'finddelphi unconverged',resid,delphi,vh
+!  write(*,'(10f8.4)')residit
+2 continue
   denave=deninf(1)*exp(0.5*delphi/Te)
 !delphi=0.
 end subroutine finddelphi
@@ -219,6 +232,10 @@ subroutine scanvh(index)
   vssize=maxval(vt)
   vhn=vhmin
   vhx=vhmax
+  vhm=(vhmax+vhmin)/2.
+  vhd=(vhmax-vhmin)/2.
+  vht=minval(vt)
+  vht=vhd/3.
   vh1=0
   vh2=0
   do j=1,2            ! Iterate for refinement of vh0
@@ -235,7 +252,8 @@ subroutine scanvh(index)
         call finddenofx
         Force=-deninteg(npts) &
              +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
-        if(abs(vh).lt.abs(vs(1))+vssize &
+!        if(lfdconv &
+        if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
              .and.Fprior.gt.0.and.Force.lt.0..and.indexref.eq.0)then
            indexref=i
            vh0=(vhprior*abs(Force)+vh*abs(Fprior))/ &
@@ -689,14 +707,11 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
      phimx2=2.*phimax
      delphix2=0.
   endif
-  if(phimax-phi.lt.-1.e-6)then
-     write(*,*)'Normally phi must be < phimax',phi,phimax
-     vthresh=0.
-  elseif(phimx2.lt.0)then
-     write(*,*)'No Potential peak this side',isigma,phimx2
-     vthresh=0.
+!     vthresh=isigma*sqrt(max(0.,phimx2-phix2)) ! prevent rounding NANs.
+  if(phimx2.lt.phix2)then    ! Move the threshold far away.
+     vthresh=40.*(vofv(nofv)-vofv(1))
   else
-     vthresh=isigma*sqrt(max(0.,phimx2-phix2)) ! prevent rounding NANs.
+     vthresh=isigma*sqrt(phimx2-phix2)
   endif
   Pfofv=0.
   fofv=0.
