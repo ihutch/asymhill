@@ -1,17 +1,18 @@
 module AsymHill
-  integer, parameter :: npts=200,nofv=400,nvh=100,ncmax=4,nsmax=20
+  integer, parameter :: npts=200,nofv=200,nvh=100,ncmax=4,nsmax=20
   real, dimension(npts) :: x,phiofx,denofx,deninteg,dFdelx
   real, dimension(nofv) :: vofv,fofv,Pfofv,Forceofv
   real, dimension(nvh) :: vha,Forcevh,delFdxvh,dphivh,fofvh
   real, dimension(ncmax) :: vs=[1.5,-1.5,0.,0.],vt=1.,dc=[1.,.5,0.,0.],vss
   real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns,delphins
-  real :: delphi,phimax=.2,phi=.1,xmax=12.
+  real :: delphi,phimax=.2,phi=.1,xmax=12.,delphi0
   character*30 string,argument
   real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.,vhmax=4.,vhn,vhx,vh0r
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
-  logical :: lrefinethreshold=.true.,lfdconv
+  logical :: lrefinethreshold=.true.,lfdconv,lexplain=.false.
+  logical :: ldenalt=.true.
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -19,7 +20,336 @@ module AsymHill
 
 contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine findtrappedf   ! Find the trapped distrib on prescribed phi side.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine parseAsymargs
+    ig=1
+    do ia=1,iargc()
+       call getarg(ia,argument)
+       if(argument(1:2).eq.'-p')read(argument(3:),*)phimax
+       if(argument(1:2).eq.'-e')read(argument(3:),*)phi
+       if(argument(1:2).eq.'-g'.and.ig.le.ncmax)then
+          nc=ig
+          read(argument(3:),*,end=101)vs(ig),vt(ig),dc(ig)
+101       ig=ig+1
+       endif
+       if(argument(1:2).eq.'-T')read(argument(3:),*)Te
+       if(argument(1:2).eq.'-s')read(argument(3:),*)ns
+       if(argument(1:2).eq.'-f')ltestnofx=.true.
+       if(argument(1:2).eq.'-x')lexplain=.not.lexplain
+       if(argument(1:2).eq.'-h')goto 120
+       if(argument(1:2).eq.'-v')read(argument(3:),*,end=102)vhmin,vhmax
+       if(argument(1:2).eq.'-w')then
+          read(argument(3:),*,end=102)pfint
+          call pfset(pfint)
+       endif
+102    continue
+    enddo
+    vhx=vhmax
+    vhn=vhmin
+    if(ns.lt.3)lrefinethreshold=.false.
+    return
+120 write(*,*)'Usage: AsymHill [-p<phimax> -g<vshift>,<vthermal>,<density> ...'
+    write(*,*)' -g...  Enter Maxwellian parameters, starting at first. Currently:'
+    write(*,'(''   '',$)')
+    write(*,11)(i,' [',vs(i),vt(i),dc(i),']',i=1,nc)
+    write(*,'(a,f6.3)')'  -p...  Set peak potential             [',phimax
+    write(*,'(a,f6.3)')'  -e...  Set test potential             [',phi
+    write(*,'(a,f6.3)')'  -T...  Set electron temperature       [',Te
+    write(*,'(a,i4)'  )'  -s...  Set number of shifts in scan   [',ns
+    write(*,'(a,l4)'  )'  -f...  Display f(v) etc               [',ltestnofx
+    write(*,'(a,l4)'  )'  -x...  Plot f(v) explanation          [',lexplain
+    write(*,'(a,l4)'  )'  -w...  Postscript write (0,3,-3)      [',pfint
+    write(*,'(a,2f6.2)')'  -v...  Set vh range                   [',vhmin,vhmax
+    call exit
+11  format(i2,a,3f6.3,a,i2,a,3f6.3,a,i2,a,3f6.3,a)
+  end subroutine parseAsymargs
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine finddenofx
+! Integrate over the potential hill to find the density, force, and
+! delF/delx (arrays of x), for the current vh and other parameters. 
+  deninteg=0.
+  dFdelx=0.
+  dx=2.*xmax/(npts-1.)
+  do i=1,npts
+!     x(i)=-xmax+2.*xmax*(i-1.)/(npts-1.)
+     x(i)=-xmax+(i-1.)*dx
+     isigma=int(sign(1.,x(i)))
+     dph=isigma*delphi/2.
+     xcor=x(i)/4.
+!     xcor=x(i)/4./sqrt(1.-dph/phimax)  !Symmetrizes curvature at origin.
+     phiofx(i)=(phimax-dph)/cosh(xcor)**4+dph
+     if(ldenalt)then   ! This density must be consistent with delphi.
+        call denhill(nc,dc,vs-vh,vt,vh,phimax,phiofx(i),isigma,nofv,denofx(i))
+     else
+        call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiofx(i),isigma,local, &
+             nofv,vofv,fofv,Pfofv)
+        denofx(i)=Pfofv(nofv)
+     endif
+     if(i.gt.1)deninteg(i)=deninteg(i-1)+&      !\int n dphi
+          (denofx(i)+denofx(i-1))*(phiofx(i)-phiofx(i-1))*.5
+     if(i.gt.1)dFdelx(i)=dFdelx(i-1)-&          !-\int (dn/dx) dphi
+          (denofx(i)-denofx(i-1))*(phiofx(i)-phiofx(i-1)) &
+          /(x(i)-x(i-1))
+  enddo
+  if(lcd)write(*,'(a,f8.5,a,f9.5,a,f9.5,a,f9.5)')'vh=',vh,' delphi=',delphi,&
+       ' Ion force=',-deninteg(npts),' delF/delx=',dFdelx(npts)
+end subroutine finddenofx
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine finddelphi
+! Iterate to find delphi consistent with specified ion distributions.
+  real, dimension(2) :: deninf
+  integer, parameter :: niter=10
+  real, dimension(niter) :: residit
+  if(lcd)write(*,*)'j   dpp       delphi      delphi-dpp    n(-)        n(+)',&
+       '   resid'
+  lfdconv=.false.
+  dpp=delphi
+  ddp=0.
+  residp=0.
+  do j=1,niter
+     do i=1,2
+        isigma=-3+2*i
+        phiinf=isigma*delphi/2.
+        if(ldenalt)then ! Alternative ni calculation.
+           call denhill(nc,dc,vs-vh,vt,vh,phimax,phiinf,isigma,nofv,deninf(i))
+        else
+           call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiinf,isigma,local,&
+                nofv,vofv,fofv,Pfofv)
+!           write(*,'(a,i4,5f10.6)')'Findelphi',j,phiinf,deninf(i),Pfofv(nofv)
+           deninf(i)=Pfofv(nofv)
+        endif
+     enddo
+     resid=(alog(deninf(2)/deninf(1))-delphi/Te)
+     residit(j)=resid
+     if(j.eq.1)then
+        delphi=delphi+.5*resid*min(1.,Te)
+     else
+        if((resid-residp).eq.0)then
+           write(*,'(a,i3,5e12.4)')'resid unchanged',j,resid,delphi,dpp,ddp
+        delphi=delphi+.5*resid*min(1.,Te)
+        else
+           ddp=resid*(delphi-dpp)/(resid-residp)
+        endif
+        dpp=delphi
+!        delphi=delphi-ddp
+        delphi=delphi-sign(min(abs(ddp),phimax/2.),ddp)
+     endif
+     if(lcd)write(*,'(i2,6f11.7)')j,dpp,delphi,delphi-dpp,deninf,resid
+     if(abs(resid).lt.0.5e-6)then
+        lfdconv=.true.
+        goto 2
+     endif
+     residp=resid
+  enddo
+  write(*,'(a,7f11.7)')'finddelphi unconverged',resid,residp,delphi,dpp,ddp
+!  write(*,'(10f8.4)')residit
+2 continue
+  denave=deninf(1)*exp(0.5*delphi/Te)
+!delphi=0.
+end subroutine finddelphi
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine scanvh(index)
+! Scan vhmin to vhmax to construct arrays of F and delF/delx
+! Return the highest index of vh at which F crosses from + to -.
+! Then refine the search in the vicinity of F=0 to find vh0.
+  index=0
+  fofvh=0.
+  vssize=maxval(vt)
+  vhn=vhmin
+  vhx=vhmax
+  vhm=(vhmax+vhmin)/2.
+  vhd=(vhmax-vhmin)/2.
+  vht=minval(vt)
+  vht=vhd/3.
+  vh1=0
+  vh2=0
+  do j=1,3            ! Iterate for refinement of vh0
+     Force=0.
+     Fmax=0.
+     vh=vhn
+     indexref=0
+     do i=1,nvh          ! Scan over the current range
+        vhprior=vh
+        delphiprior=delphi
+        Fprior=Force
+        vh=vhn+(i-1.)*(vhx-vhn)/(nvh-1.)
+        lcd=.false.
+        call finddelphi
+        call finddenofx
+        Force=-deninteg(npts) &
+             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
+!        if(lfdconv &
+        if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
+             .and.Fprior.gt.0.and.Force.lt.0..and.indexref.eq.0)then
+           indexref=i
+           vh0=(vhprior*abs(Force)+vh*abs(Fprior))/ &
+                (abs(Fprior)+abs(Force))
+           delphi0=(delphiprior*abs(Force)+delphi*abs(Fprior))/ &
+                (abs(Fprior)+abs(Force))
+           delphi0=delphi
+           vh1=vhprior
+           vh2=vh
+        endif
+        if(j.eq.1)then    ! Store coarse scan.
+           vha(i)=vh
+           dphivh(i)=delphi
+           Forcevh(i)=Force
+           delFdxvh(i)=dFdelx(npts)
+           if(dFdelx(npts).le.0.)then
+              index=indexref
+              fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
+                   +fofvh(index)*abs(Forcevh(index-1)))/ &
+                   (abs(Forcevh(index-1))+abs(Forcevh(index)))
+              dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
+                   +delFdxvh(index)*abs(Forcevh(index-1)))/ &
+                   (abs(Forcevh(index-1))+abs(Forcevh(index)))
+           endif
+           do k=1,nc             ! Store the finfty of vh.
+              vt2x2=vt(k)**2*2.
+              gcoef=1./sqrt(vt2x2*3.1415926)
+              fofvh(i)=fofvh(i)+dc(k)*gcoef*exp(-(vh-vs(k))**2/vt2x2)
+           enddo
+        endif
+     enddo
+!     write(*,*)'vh0 etc',vh0,Force,delphi0,deninteg(npts)
+     if(indexref.gt.1)then  ! Refine the equilibrium vh0.
+        vhn=vh1
+        vhx=vh2
+!        write(*,*)'vhn,vhx',vhn,vhx
+     else
+        exit ! from refinement j-loop.
+     endif
+  enddo
+!  write(*,*)vh0,index,vha(index-1),vha(index),Forcevh(index-1),Forcevh(index)
+end subroutine scanvh
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine scanspacing
+! Iterate scanvh calls over different spacings  
+! If ns .eq. 1 or 2 report vh and do plots
+  vss=vs
+  vsfac=1.
+  if(ns.ge.3)vsfac=2.
+  do i=1,ns
+     vsfaci=vsfac*(i-min(1.,ns-1.))/(ns-min(1.,ns-1.))
+     vs=vss*vsfaci
+     call scanvh(index)
+     Fcvhns(:,i)=Forcevh
+     dFvhns(:,i)=delFdxvh
+     fvvhns(:,i)=fofvh
+     dpvhns(:,i)=dphivh
+     dF0ns(i)=1. 
+     if(i.eq.1)write(*,*)&
+          ' At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,  vh0',&
+          '   vshift  Delphi/psi^2'
+     if(index.ne.0)then
+! vh0 is instead refined in scanvh
+!     vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
+!           (abs(Forcevh(index-1))+abs(Forcevh(index)))
+!        dphivh0=(dphivh(index-1)*abs(Forcevh(index)) &
+!             +dphivh(index)*abs(Forcevh(index-1)))/ &
+!             (abs(Forcevh(index-1))+abs(Forcevh(index)))
+        dF0ns(i)=dFdx0
+        fv0ns(i)=fvh0
+        vh0ns(i)=vh0
+        vh=vh0
+        call finddelphi
+        write(*,'(i4,7f8.4,f9.5)')index,vha(index-1),vha(index),&
+             Forcevh(index-1)/phimax**2,Forcevh(index)/phimax**2, &
+             dFdx0/phimax**2,vh0,vs(1),delphi0/phimax**2
+        delphins(i)=delphi
+        if(ns.lt.3)then
+           lcd=.true.
+           call finddenofx
+           call plotdenofx
+           call findtrappedf
+           call otherxofphi
+        endif
+     else
+        write(*,'(a,a,f8.4)')'     No stable equilibrium found for vs(1)=    ',&
+             '     ',vs(1)
+     endif
+     if(ns.le.3)call forcedivplot
+  enddo
+  if(lrefinethreshold)then  ! Refinement of threshold: 
+! Find vs1fac and vs2fac bracketting threshold
+  vhminst=vhmin
+  vhmaxst=vhmax
+  if(ns.gt.2)then
+     do i=1,ns
+        if(dF0ns(i).ge.0)then
+           vs1fac=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+        elseif(vs1fac.ne.0.)then
+           vs2fac=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
+           goto 2
+        else
+           write(*,*)'ERROR: dF0ns negative before positive',dF0ns(i)
+        endif
+     enddo
+     write(*,*)'Failed to bracket vsfacs:',vs1fac,vs2fac
+     return
+2    continue
+     write(*,*)'Refining vshift threshold'
+     vh0=vh0ns(i)
+     vs1fac=0.
+     dvh=(vhmax-vhmin)/5.
+     vhmin=vh0-dvh
+     vhmax=vh0+dvh
+     do i=1,ns
+        call bisectspacing(vs1fac,vs2fac)
+     enddo
+     vh0r=vh0
+     dF0ns(ns+1)=dFdx0
+     vh0ns(ns+1)=vh0r
+     vhmin=vhminst
+     vhmax=vhmaxst
+     call scanvh(index) ! Needed to reset various arrays to vhmin/max
+     Fcvhns(:,ns+1)=Forcevh     ! Set the profiles etc. for refined soln.
+     dFvhns(:,ns+1)=delFdxvh
+     fvvhns(:,ns+1)=fofvh
+     dpvhns(:,ns+1)=dphivh
+     vh0ns(ns+1)=vh0r
+     fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
+          +fofvh(index)*abs(Forcevh(index-1)))/ &
+          (abs(Forcevh(index-1))+abs(Forcevh(index)))
+     fv0ns(ns+1)=fvh0
+  endif
+  endif ! Refinement
+end subroutine scanspacing
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine bisectspacing(vs1fac,vs2fac)
+! Given vs1 and vs2 spacing factors that are below and above the 
+! stability threshold, bisect to refine the threshold estimate.
+  vs3fac=(vs1fac+vs2fac)/2.
+  vs=vss*vs3fac
+  call scanvh(index)   ! Sets the vh0
+  dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
+       +delFdxvh(index)*abs(Forcevh(index-1)))/ &
+       (abs(Forcevh(index-1))+abs(Forcevh(index)))
+  if(index.ne.0.and.dFdx0.le.0.)then
+     vs2fac=vs3fac
+     dvh=(vhmax-vhmin)/1.
+     vhmin=vh0-dvh/2.
+     vhmax=vh0+dvh/2.
+     vh=vh0 
+     call finddelphi  ! For the print out:
+     write(*,'(i4,7f8.4,f9.5)')index,vha(index-1),vha(index),&
+          Forcevh(index-1)/phimax**2,Forcevh(index)/phimax**2, &
+             dFdx0/phimax**2,vh0,vs(1),delphi/phimax**2
+  else
+     vs1fac=vs3fac
+  endif
+end subroutine bisectspacing
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine initvofv
+! Initialize velocity range using current vh as maximal.
+  vmax=4.4+max(abs(maxval(vs)-vh),abs(minval(vs)-vh))
+  do i=1,nofv
+     vofv(i)=-vmax+2.*vmax*(i-1.)/(nofv-1.)
+  enddo
+end subroutine initvofv
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine findtrappedf   
+! Find the trapped distrib on prescribed phi side. And plot it. 2 plots.
   external denionhill
   isigma=nint(sign(1.,delphi))   ! Side of hill with highest phi_infty.
   coshlen=4.              ! Set the shape adjustment parameters.
@@ -28,7 +358,7 @@ subroutine findtrappedf   ! Find the trapped distrib on prescribed phi side.
   um=0.
   call BGKint(nphi,psi,um,xmax,coshlen,toplen,denion,phiofi(0),usofphi &
   ,xofphi(0),edenofphi(0),edenuntrap,edentrap,etilden,fofphi,u0ofphi,denionhill)
-  write(*,*)'Return from BGKint',u0ofphi(0),u0ofphi(nphi)
+!  write(*,*)'Return from BGKint',u0ofphi(0),u0ofphi(nphi)
 !  write(*,'(i4,2f8.4)')(i,xofphi(i),etilden(i),i=0,nphi)
   call multiframe(3,1,0)
   call autoplot(xofphi(0),phiofi(0),nphi+1)
@@ -45,11 +375,12 @@ subroutine findtrappedf   ! Find the trapped distrib on prescribed phi side.
 end subroutine findtrappedf
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine otherxofphi  ! Solve Poisson's equation on the other side.
+! and plot the comparison.
   isigma=-nint(sign(1.,delphi))
   phistep=(phimax+isigma*delphi/2.)/nphi      ! The spacing of the first side.
   nextra=max(2,min(nint(abs(delphi)/phistep),nphi))! The number of extra values.
   phistep=abs(delphi)/nextra
-  write(*,*)'isigma,nextra,delphi',isigma,nextra,delphi
+!  write(*,*)'isigma,nextra,delphi',isigma,nextra,delphi
   do i=-nextra,-1
      phiofi(i)=i*phistep
      edenofphi(i)=exp((phiofi(i)+abs(delphi)/2.)/Te) ! Maxwellian e-density
@@ -77,10 +408,10 @@ subroutine otherxofphi  ! Solve Poisson's equation on the other side.
      x2ofphi(i)=x2ofphi(i+1)-(phiofi(i)-phiofi(i+1))* &
           (sqrt(1./(2.*Vminus(i)))+sqrt(1./(2.*Vminus(i+1))))/2.
      rhoprior=rhothis
-     if(i.le.2)write(*,'(i4,4f10.6)')i,phiofi(i)-abs(delphi/2)&
+     if(lcd.and.i.le.2)write(*,'(i4,4f10.6)')i,phiofi(i)-abs(delphi/2)&
           &,rhothis,Vminus(i),x2ofphi(i)
   enddo
-  write(*,*)'  i     phi      rho       Vminus       x'
+  if(lcd)write(*,*)'  i     phi      rho       Vminus       x'
 ! For illustrative reasons make the penultimate point an exponential decay
 ! This is a fudge to cover up the slight inaccuracy is the V integration.
 
@@ -101,199 +432,41 @@ subroutine otherxofphi  ! Solve Poisson's equation on the other side.
   call pltend
 end subroutine otherxofphi
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine parseAsymargs
-    ig=1
-    do ia=1,iargc()
-       call getarg(ia,argument)
-       if(argument(1:2).eq.'-p')read(argument(3:),*)phimax
-       if(argument(1:2).eq.'-e')read(argument(3:),*)phi
-       if(argument(1:2).eq.'-g'.and.ig.le.ncmax)then
-          nc=ig
-          read(argument(3:),*,end=101)vs(ig),vt(ig),dc(ig)
-101       ig=ig+1
-       endif
-       if(argument(1:2).eq.'-T')read(argument(3:),*)Te
-       if(argument(1:2).eq.'-s')read(argument(3:),*)ns
-       if(argument(1:2).eq.'-f')ltestnofx=.true.
-       if(argument(1:2).eq.'-h')goto 120
-       if(argument(1:2).eq.'-v')read(argument(3:),*,end=102)vhmin,vhmax
-       if(argument(1:2).eq.'-w')then
-          read(argument(3:),*,end=102)pfint
-          call pfset(pfint)
-       endif
-102    continue
-    enddo
-    vhx=vhmax
-    vhn=vhmin
-    if(ns.lt.3)lrefinethreshold=.false.
-    return
-120 write(*,*)'Usage: AsymHill [-p<phimax> -g<vshift>,<vthermal>,<density> ...'
-    write(*,*)' -g...  Enter Maxwellian parameters, starting at first. Currently:'
-    write(*,'(''   '',$)')
-    write(*,11)(i,' [',vs(i),vt(i),dc(i),']',i=1,nc)
-    write(*,'(a,f6.3)')'  -p...  Set peak potential             [',phimax
-    write(*,'(a,f6.3)')'  -e...  Set test potential             [',phi
-    write(*,'(a,f6.3)')'  -T...  Set electron temperature       [',Te
-    write(*,'(a,i4)'  )'  -s...  Set number of shifts in scan   [',ns
-    write(*,'(a,l4)'  )'  -f...  Display f(v) etc               [',ltestnofx
-    write(*,'(a,l4)'  )'  -w...  Postscript write (0,3,-3)      [',pfint
-    write(*,'(a,2f6.2)')'  -v...  Set vh range                   [',vhmin,vhmax
-    call exit
-11  format(i2,a,3f6.3,a,i2,a,3f6.3,a,i2,a,3f6.3,a)
-  end subroutine parseAsymargs
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine finddenofx
-! Integrate over the potential hill to find the density, force, and
-! delF/delx (arrays of x), for the current vh and other parameters. 
-  deninteg=0.
-  dFdelx=0.
-  do i=1,npts
-     x(i)=-xmax+2.*xmax*(i-1.)/(npts-1.)
-     isigma=int(sign(1.,x(i)))
-     dph=isigma*delphi/2.
-     xcor=x(i)/4.
-!     xcor=x(i)/4./sqrt(1.-dph/phimax)  !Symmetrizes curvature at origin.
-     phiofx(i)=(phimax-dph)/cosh(xcor)**4+dph
-!     if(phiofx(i).gt.phimax)then
-!        write(*,*)'phi>phimax',phiofx(i),phimax,delphi,i,dph,xcor
-!        stop
-!     endif
-     call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiofx(i),isigma,local, &
-          nofv,vofv,fofv,Pfofv)
-     denofx(i)=Pfofv(nofv)
-     if(i.gt.1)deninteg(i)=deninteg(i-1)+&      !\int n dphi
-          (denofx(i)+denofx(i-1))*(phiofx(i)-phiofx(i-1))*.5
-     if(i.gt.1)dFdelx(i)=dFdelx(i-1)-&          !-\int (dn/dx) dphi
-          (denofx(i)-denofx(i-1))*(phiofx(i)-phiofx(i-1)) &
-          /(x(i)-x(i-1))
-  enddo
-  if(lcd)write(*,'(a,f8.5,a,f9.5,a,f9.5,a,f9.5)')'vh=',vh,' delphi=',delphi,&
-       ' Ion force=',-deninteg(npts),' delF/delx=',dFdelx(npts)
-end subroutine finddenofx
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine finddelphi
-! Iterate to find delphi consistent with specified ion distributions.
-  real, dimension(2) :: deninf
-  integer, parameter :: niter=10
-  real, dimension(niter) :: residit
-  if(lcd)write(*,*)'j   dpp       delphi      delphi-dpp    n(-)        n(+)',&
-       '   resid'
-  lfdconv=.false.
-  dpp=delphi
-  ddp=0.
-  residp=0.
-  do j=1,niter
-     do i=1,2
-        isigma=-3+2*i
-        phiinf=isigma*delphi/2.
-        call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiinf,isigma,local,&
-             nofv,vofv,fofv,Pfofv)
-        deninf(i)=Pfofv(nofv)
-     enddo
-     resid=(alog(deninf(2)/deninf(1))-delphi/Te)
-     residit(j)=resid
-     if(j.eq.1)then
-        delphi=delphi+.5*resid*min(1.,Te)
-     else
-        if((resid-residp).eq.0)then
-           write(*,*)'resid unchanged',resid,delphi,j
-        else
-           ddp=resid*(delphi-dpp)/(resid-residp)
-        endif
-        dpp=delphi
-!        delphi=delphi-ddp
-        delphi=delphi-sign(min(abs(ddp),phimax/2.),ddp)
-     endif
-     if(lcd)write(*,'(i2,6f11.7)')j,dpp,delphi,delphi-dpp,deninf,resid
-     if(abs(resid).lt.1.e-6)then
-        lfdconv=.true.
-        goto 2
-     endif
-!     if(abs(delphi).gt.2.*phimax)then  !Prevent improper delphi
-!        write(*,'(a,f9.4)')'              WARNING: Improper delphi. vh=',vh
-!        delphi=sign(2.*phimax,delphi)
-!        delphi=delphi+.8*ddp
-!        exit
-!     endif
-     residp=resid
-  enddo
-  write(*,'(a,7f10.5)')'finddelphi unconverged',resid,delphi,vh
-!  write(*,'(10f8.4)')residit
-2 continue
-  denave=deninf(1)*exp(0.5*delphi/Te)
-!delphi=0.
-end subroutine finddelphi
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine scanvh(index)
-! Scan vhmin to vhmax to construct arrays of F and delF/delx
-! Return the highest index of vh at which F crosses from + to -.
-  index=0
-  fofvh=0.
-  vssize=maxval(vt)
-  vhn=vhmin
-  vhx=vhmax
-  vhm=(vhmax+vhmin)/2.
-  vhd=(vhmax-vhmin)/2.
-  vht=minval(vt)
-  vht=vhd/3.
-  vh1=0
-  vh2=0
-  do j=1,2            ! Iterate for refinement of vh0
-     Force=0.
-     Fmax=0.
-     vh=vhn
-     indexref=0
-     do i=1,nvh          ! Scan over the current range
-        vhprior=vh
-        Fprior=Force
-        vh=vhn+(i-1.)*(vhx-vhn)/(nvh-1.)
-        lcd=.false.
-        call finddelphi
-        call finddenofx
-        Force=-deninteg(npts) &
-             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
-!        if(lfdconv &
-        if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
-             .and.Fprior.gt.0.and.Force.lt.0..and.indexref.eq.0)then
-           indexref=i
-           vh0=(vhprior*abs(Force)+vh*abs(Fprior))/ &
-                (abs(Fprior)+abs(Force))
-           vh1=vhprior
-           vh2=vh
-        endif
-        if(j.eq.1)then    ! Store coarse scan.
-           vha(i)=vh
-           dphivh(i)=delphi
-           Forcevh(i)=Force
-           delFdxvh(i)=dFdelx(npts)
-           if(dFdelx(npts).le.0.)index=indexref
-           do k=1,nc             ! Store the finfty of vh.
-              vt2x2=vt(k)**2*2.
-              gcoef=1./sqrt(vt2x2*3.1415926)
-              fofvh(i)=fofvh(i)+dc(k)*gcoef*exp(-(vh-vs(k))**2/vt2x2)
-           enddo
-        endif
-!        write(*,*)'vh,force,delphi',vh,Force,delphi,indexref
-     enddo
-     if(indexref.gt.1)then  ! Refine the equilibrium vh0.
-        vhn=vh1
-        vhx=vh2
-!        write(*,*)'vhn,vhx',vhn,vhx
-     else
-        exit ! from refinement j-loop.
-     endif
-  enddo
-end subroutine scanvh
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine initvofv
-! Initialize velocity range using current vh as maximal.
-  vmax=4.4+max(abs(maxval(vs)-vh),abs(minval(vs)-vh))
-  do i=1,nofv
-     vofv(i)=-vmax+2.*vmax*(i-1.)/(nofv-1.)
-  enddo
-end subroutine initvofv
+subroutine plotfvden
+call multiframe(2,4,0)
+call dcharsize(.025,.025)
+call pltinit(vha(1),vha(nvh),0.,0.5)
+call ticlabtog
+call axis
+call ticlabtog
+call axis2
+call polyline(vha,fofvh,nvh)
+call legendline(.05,.9,258,'!Bf!di!A;!@!d(!Bv!@!d!A;!@!d)')
+call legendline(.85,.08,258,'!Bv!@!d!A;!@!d')
+call legendline(.05,.8,258,'0.4')
+if(dFdx0.lt.0)call polymark(vh0,fvh0,1,10)
+
+call setframe(2)
+call minmax(denofx,npts,dmin,dmax)
+call fitrange(dmin,dmax,3,ipow,fac10,delta,first,xlast)
+call pltinit(x(1),x(npts),first,xlast)
+call ticlabtog
+call axis
+call ticlabtog
+call axis2
+do i=1,2
+   yl=first+i*delta
+   call fwrite(yl,iwidth,3,string)
+   call jdrwstr(wx2nx(x(npts)),wy2ny(yl),string(1:iwidth),-1.2)
+enddo
+call polyline(x,denofx,npts)
+call jdrwstr(wx2nx(x(npts)),wy2ny(.1*first+.9*xlast),'!Bn!di!@!d(!Bx!@)!@',-1.2)
+call legendline(.9,.08,258,'!Bx!@')
+call multiframe(0,0,0)
+end subroutine plotfvden
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine plotdenofx
+! Plot phi,ni,V of x.
   call multiframe(3,1,0)
   call autoplot(x,phiofx,npts)
   call legendline(.9,.9,258,'(a)')
@@ -331,7 +504,8 @@ subroutine plotdenofx
 end subroutine plotdenofx
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine plotex
+subroutine plotexplain
+! Explanatory plot with reflected/passing labels etc.
   call multiframe(4,1,1)
   call minmax(phiofx,npts,pmin,pmax)
 
@@ -399,9 +573,10 @@ subroutine plotex
   call polyline([x(1),x(npts)],[0.,0.],2)
   call pltend
   call multiframe(0,0,0)
-end subroutine plotex
+end subroutine plotexplain
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine testfvhill
+  subroutine plotfvhill
+! Plot f(v) for sigma=+-, and P(v)
   call multiframe(4,1,1)
   call dcharsize(.02,.02)
   do isigma=-1,1,2
@@ -423,29 +598,7 @@ end subroutine plotex
   enddo
   call multiframe(0,0,0)
   call pltend
-end subroutine testfvhill
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine timenofx
-! This routine takes 8 seconds for 1M densities, when npts=400.
-  if(nc.eq.2)dc(2)=.5
-  if(nc.eq.2)vs(nc)=-vs(1)
-  ncycle=2500
-  call initvofv
-  write(*,*)'Timing routine starting'
-  do j=1,ncycle
-  do i=1,npts
-     x(i)=-xmax+2.*xmax*(i-1.)/(npts-1.)
-     phiofx(i)=phimax/cosh(x(i)/4.)**4
-     isigma=int(sign(1.,x(i)))
-     call fvhill(nc,dc,vs,vt-vh,phimax,0.,phiofx(i),isigma,local, &
-          nofv,vofv,fofv,Pfofv)
-     denofx(i)=Pfofv(nofv)
-     if(.not.abs(denofx(i)).ge.0)write(*,*)i,Pfofv(nofv)
-  enddo
-  enddo
-  write(*,'(a,i5,a,i5,a,i8,a)')'Found denofx for',npts,' points a total of '&
-       ,ncycle,' times: ',npts*ncycle,' densities'
-end subroutine timenofx
+end subroutine plotfvhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine forcedivplot
 ! Plot the different contributions to F from fofvh Forcevh as fn of vha.
@@ -543,127 +696,27 @@ subroutine forceplotns
   call multiframe(0,0,0)  
 end subroutine forceplotns
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine scanspacing
-! Iterate scanvh calls over different spacings  
-! If ns .eq. 1 or 2 report vh and do plots
-  vss=vs
-  vsfac=1.
-  if(ns.ge.3)vsfac=2.
-  do i=1,ns
-     vsfaci=vsfac*(i-min(1.,ns-1.))/(ns-min(1.,ns-1.))
-     vs=vss*vsfaci
-     call scanvh(index)
-     Fcvhns(:,i)=Forcevh
-     dFvhns(:,i)=delFdxvh
-     fvvhns(:,i)=fofvh
-     dpvhns(:,i)=dphivh
-     dF0ns(i)=1. 
-     if(i.eq.1)write(*,*)&
-          ' At   vh(i-1)  vh(i)  F(i-1)  F(i)   delF/dx,  vh0',&
-          '   vshift  Delphi/psi^2'
-     if(index.ne.0)then
-! vh0 is instead refined in scanvh
-!     vh0=(vha(index-1)*abs(Forcevh(index))+vha(index)*abs(Forcevh(index-1)))/ &
-!           (abs(Forcevh(index-1))+abs(Forcevh(index)))
-        fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
-             +fofvh(index)*abs(Forcevh(index-1)))/ &
-             (abs(Forcevh(index-1))+abs(Forcevh(index)))
-        dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
-             +delFdxvh(index)*abs(Forcevh(index-1)))/ &
-             (abs(Forcevh(index-1))+abs(Forcevh(index)))
-        dF0ns(i)=dFdx0
-        fv0ns(i)=fvh0
-        vh0ns(i)=vh0
-        vh=vh0
-!        lcd=.true.
-        call finddelphi
-!        lcd=.false.
-        write(*,'(i4,7f8.4,f9.5)')index,vha(index-1),vha(index+1),&
-             Forcevh(index-1)/phimax**2,Forcevh(index)/phimax**2, &
-             dFdx0/phimax**2,vh0,vs(1),delphi/phimax**2
-        delphins(i)=delphi
-        if(ns.lt.3)then
-           lcd=.true.
-           call finddenofx
-           call plotdenofx
-           call findtrappedf
-           call otherxofphi
-        endif
-     else
-        write(*,'(a,a,f8.4)')'     No stable equilibrium found for vs(1)=    ',&
-             '     ',vs(1)
-     endif
-     if(ns.le.3)call forcedivplot
+subroutine timenofx
+! This routine takes 8 seconds for 1M densities, when npts=400.
+  if(nc.eq.2)dc(2)=.5
+  if(nc.eq.2)vs(nc)=-vs(1)
+  ncycle=2500
+  call initvofv
+  write(*,*)'Timing routine starting'
+  do j=1,ncycle
+  do i=1,npts
+     x(i)=-xmax+2.*xmax*(i-1.)/(npts-1.)
+     phiofx(i)=phimax/cosh(x(i)/4.)**4
+     isigma=int(sign(1.,x(i)))
+     call fvhill(nc,dc,vs,vt-vh,phimax,0.,phiofx(i),isigma,local, &
+          nofv,vofv,fofv,Pfofv)
+     denofx(i)=Pfofv(nofv)
+     if(.not.abs(denofx(i)).ge.0)write(*,*)i,Pfofv(nofv)
   enddo
-  if(lrefinethreshold)then  ! Refinement of threshold: 
-! Find vs1fac and vs2fac bracketting threshold
-  vhminst=vhmin
-  vhmaxst=vhmax
-  if(ns.gt.2)then
-     do i=1,ns
-        if(dF0ns(i).ge.0)then
-           vs1fac=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
-        elseif(vs1fac.ne.0.)then
-           vs2fac=vsfac*(i-min(1,ns-1))/(ns-min(1,ns-1))
-           goto 2
-        else
-           write(*,*)'ERROR: dF0ns negative before positive',dF0ns(i)
-        endif
-     enddo
-     write(*,*)'Failed to bracket vsfacs:',vs1fac,vs2fac
-     return
-2    continue
-     write(*,*)'Refining vshift threshold'
-     vh0=vh0ns(i)
-     vs1fac=0.
-     dvh=(vhmax-vhmin)/5.
-     vhmin=vh0-dvh
-     vhmax=vh0+dvh
-     do i=1,ns
-        call bisectspacing(vs1fac,vs2fac)
-     enddo
-     vh0r=vh0
-     dF0ns(ns+1)=dFdx0
-     vh0ns(ns+1)=vh0r
-     vhmin=vhminst
-     vhmax=vhmaxst
-     call scanvh(index) ! Needed to reset various arrays to vhmin/max
-     Fcvhns(:,ns+1)=Forcevh     ! Set the profiles etc. for refined soln.
-     dFvhns(:,ns+1)=delFdxvh
-     fvvhns(:,ns+1)=fofvh
-     dpvhns(:,ns+1)=dphivh
-     vh0ns(ns+1)=vh0r
-     fvh0=(fofvh(index-1)*abs(Forcevh(index)) &
-          +fofvh(index)*abs(Forcevh(index-1)))/ &
-          (abs(Forcevh(index-1))+abs(Forcevh(index)))
-     fv0ns(ns+1)=fvh0
-  endif
-  endif ! Refinement
-end subroutine scanspacing
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine bisectspacing(vs1fac,vs2fac)
-! Given vs1 and vs2 spacing factors that are below and above the 
-! stability threshold, bisect to refine the threshold estimate.
-  vs3fac=(vs1fac+vs2fac)/2.
-  vs=vss*vs3fac
-  call scanvh(index)   ! Sets the vh0
-  dFdx0=(delFdxvh(index-1)*abs(Forcevh(index)) &
-       +delFdxvh(index)*abs(Forcevh(index-1)))/ &
-       (abs(Forcevh(index-1))+abs(Forcevh(index)))
-  if(index.ne.0.and.dFdx0.le.0.)then
-     vs2fac=vs3fac
-     dvh=(vhmax-vhmin)/1.
-     vhmin=vh0-dvh/2.
-     vhmax=vh0+dvh/2.
-     vh=vh0 
-     call finddelphi  ! For the print out:
-     write(*,'(i4,7f8.4,f9.5)')index,vha(index-1),vha(index+1),&
-          Forcevh(index-1)/phimax**2,Forcevh(index)/phimax**2, &
-             dFdx0/phimax**2,vh0,vs(1),delphi/phimax**2
-  else
-     vs1fac=vs3fac
-  endif
-end subroutine bisectspacing
+  enddo
+  write(*,'(a,i5,a,i5,a,i8,a)')'Found denofx for',npts,' points a total of '&
+       ,ncycle,' times: ',npts*ncycle,' densities'
+end subroutine timenofx
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end module AsymHill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -715,7 +768,7 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
   endif
   Pfofv=0.
   fofv=0.
-  vdiffm=vofv(1)
+  vdiffm=vofv(1)-vthresh
   fim=0.
   pam=0.
   pa=0.
@@ -737,27 +790,83 @@ subroutine fvhill(nc,dc,vs,vt,phimax,delphi,phi,isigma,local,&
      enddo
 !     if(enx2.lt.0)fi=0.    ! Zero f at negative energy??
      fofv(i)=fi
-!     if(vdiffm*vdiff.le.0.)then
-! Crossing threshold at which the discontinuity in f occurs, which is
-! where v=isigma*sqrt(phimx2-phix2), i.e. vdiff=0; to correctly integrate:
-        if(i.gt.1)pa=pam+ (abs(vdiffm)*fim+abs(vdiff)*fi) &
+     if(i.gt.1)pa=pam+ (abs(vdiffm)*fim+abs(vdiff)*fi) &
              /(abs(vdiffm)+abs(vdiff))*(vofv(i)-vofv(i-1))
 ! Actually using this interpolation always smooths ftrapped glitches.
 ! But I am not 100% certain it is always justified.
-!        if(.not.(abs(pam).ge.0.))then
-!           write(*,*)'fvhiil Nan',vdiff,vdiffm,fi,fim,vofv(i),vofv(i-1),&
-!                i,vthresh,phi,phimax
-!           stop
-!        endif
-!     else
-!        if(i.gt.1)pa=pam+0.5*(fi+fim)*(vofv(i)-vofv(i-1))
-!     endif
      Pfofv(i)=Pfofv(i)+pa
      pam=pa
      vdiffm=vdiff
      fim=fi
   enddo
 end subroutine fvhill
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate density for shifted Maxwellian
+! distant distributions on a single-humped repelling potential hill of
+! maximum potential phimax, at potential phi, on side isigma of the hill.
+! This version uses a velocity mesh for integration that always has a 
+! point at the discontinuity of fv, and does not return fv, only density.
+! On entry:
+! nc is the number of Maxwellian components 
+! dc(nc), vs(nc), vt(nc) is each component's density, vshift, sqrt(T/M)
+! phimax is hill's peak potential relative to mean distant potential
+! phi is the potential at which to find the distribution.
+! isigma is the side of the hill on which this potential lies.
+! All velocities are relative to the hill's rest frame.
+! On exit:
+! theden is the integral of fv dv. I.e. the density
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden)
+  real :: dc(nc),vs(nc),vt(nc),phimax,phi,theden
+  integer :: isigma,nofv
+
+  
+  if(isigma.ne.1.and.isigma.ne.-1)stop 'isigma must be +-1'
+  phix2=2.*phi
+  phimx2=2.*phimax
+  vthresh=isigma*sqrt(max(0.,phimx2-phix2)) ! prevent rounding NANs.
+  vinf=vthresh ! Silence warning
+  vmax=4.4+max(abs(maxval(vs)-vh),abs(minval(vs)-vh))
+  sqtwopi=sqrt(2.*3.1415926)
+  nvhere=nofv+1-mod(nofv,2) ! Odd number of points so thresh is at (nvhere+1)/2
+  ithresh=(nvhere+1)/2
+  theden=0.
+  fim=0.
+  vm=(ithresh-1)*(-vmax-vthresh)/(ithresh-1.)+vthresh
+  do i=1,nvhere
+     if(i.le.ithresh)then  ! Lower and upper velocity ranges
+        vi=(ithresh-i)*(-vmax-vthresh)/(ithresh-1.)+vthresh
+     else                  ! vthresh to +-vmax
+        vi=(i-ithresh)*(vmax-vthresh)/(nvhere-ithresh)+vthresh
+     endif
+     vsign=sign(1.,vi)
+     enx2=phix2+vi**2
+     if(i.eq.ithresh)then  ! Crossing threshold. Use prior sign this step
+        vinf=sign(sqrt(max(0.,enx2)),vinf)
+     elseif(int(vsign).ne.isigma)then        ! Moving inward
+        vinf=vsign*sqrt(max(0.,enx2))        
+     elseif(enx2.gt.phimx2)then              ! Passing
+        vinf=vsign*sqrt(max(0.,enx2))
+     else                                     ! Reflected
+        vinf=-vsign*sqrt(max(0.,enx2))
+     endif
+     fi=0.
+     do j=1,nc   ! Sum over maxwellian components.
+        fi=fi+dc(j)*exp(-0.5*(vinf-vs(j))**2/vt(j)**2)/(vt(j)*sqtwopi)
+     enddo
+     theden=theden+ (fim+fi)*0.5*(vi-vm)
+     vinf=-vinf
+     if(i.eq.ithresh)then   ! Set the new prior fi for next step
+        fi=0.
+        do j=1,nc   ! Sum over maxwellian components.
+           fi=fi+dc(j)*exp(-0.5*(vinf-vs(j))**2/vt(j)**2)/(vt(j)*sqtwopi)
+        enddo
+     endif
+!     write(*,'(i5,5f10.6)')i,vthresh,vi,fi,theden
+     fim=fi
+     vm=vi
+  enddo
+end subroutine denhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Return the ion density at a potential phiminf relative to phiinf on
 ! the side isigma. To be called by BGKint.
@@ -776,16 +885,34 @@ use AsymHill
 call parseAsymargs
 call initvofv
 
+if(.false.)then
+! Testing force calculation
+!vh=5.e-6
+call finddenofx
+do i=1,npts/2
+write(*,*)i,denofx(i)-denofx(npts+1-i),deninteg(i),deninteg(npts+1-i)
+enddo
+call finddelphi
+! This shows that we are in rounding noise at moderately low psi.
+endif
+
 if(ltestnofx)then
    call finddelphi
-   call testfvhill
-   write(*,'(a,9f6.3)')'testnofx: vshift,vtherm,dens',(vs(i),vt(i),dc(i),i=1,nc)
+   call plotfvhill
+!   write(*,'(a,9f6.3)')'plotfvhill: vshift,vthm,dens',(vs(i),vt(i),dc(i),i=1,nc)
    call finddenofx
-   if(delphi.gt.0)call plotex
+   if(lexplain)call plotexplain
    call plotdenofx
 endif
 
+if(ns.gt.0)then
 call scanspacing
-
 call forceplotns
+endif
+
+
+call scanvh(index)
+call plotfvden
+call pltend
+
 end program Asym
