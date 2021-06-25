@@ -126,7 +126,7 @@ subroutine finddelphi
      else
         if((resid-residp).eq.0)then
            write(*,'(a,i3,5e12.4)')'resid unchanged',j,resid,delphi,dpp,ddp
-        delphi=delphi+.5*resid*min(1.,Te)
+           delphi=delphi+.5*resid*min(1.,Te)
         else
            ddp=resid*(delphi-dpp)/(resid-residp)
         endif
@@ -873,9 +873,13 @@ end subroutine denhill
 real function denionhill(phiminf)
   use AsymHill
   phimzero=phiminf+isigma*delphi/2.
-  call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phimzero,isigma,local, &
-        nofv,vofv,fofv,Pfofv)
-   denionhill=Pfofv(nofv)  
+  if(ldenalt)then   ! This density must be consistent with delphi.
+     call denhill(nc,dc,vs-vh,vt,vh,phimax,phimzero,isigma,nofv,denionhill)
+  else
+     call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phimzero,isigma,local, &
+          nofv,vofv,fofv,Pfofv)
+     denionhill=Pfofv(nofv)
+  endif
 end function denionhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
