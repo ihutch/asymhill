@@ -6,13 +6,14 @@ module AsymHill
   real, dimension(ncmax) :: vs=[1.5,-1.5,0.,0.],vt=1.,dc=[1.,.5,0.,0.],vss
   real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns,delphins
-  real :: delphi,phimax=.2,phi=.1,xmax=12.,delphi0
+  real :: delphi,phimax=.2,phi=.1,xmax=12.,delphi0,Forcediff
+  integer :: jit
   character*30 string,argument
   real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.,vhmax=4.,vhn,vhx,vh0r
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
   logical :: lrefinethreshold=.true.,lfdconv,lexplain=.false.
-  logical :: ldenalt=.true.
+  logical :: ldenalt=.true.,lfvden=.false.,lfover=.false.,lfindforce=.true.
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -35,7 +36,10 @@ contains
        if(argument(1:2).eq.'-T')read(argument(3:),*)Te
        if(argument(1:2).eq.'-s')read(argument(3:),*)ns
        if(argument(1:2).eq.'-f')ltestnofx=.true.
+       if(argument(1:2).eq.'-m')lfvden=.true.
        if(argument(1:2).eq.'-x')lexplain=.not.lexplain
+       if(argument(1:2).eq.'-d')ldenalt=.not.ldenalt
+       if(argument(1:2).eq.'-o')lfover=.not.lfover
        if(argument(1:2).eq.'-h')goto 120
        if(argument(1:2).eq.'-v')read(argument(3:),*,end=102)vhmin,vhmax
        if(argument(1:2).eq.'-w')then
@@ -57,7 +61,10 @@ contains
     write(*,'(a,f6.3)')'  -T...  Set electron temperature       [',Te
     write(*,'(a,i4)'  )'  -s...  Set number of shifts in scan   [',ns
     write(*,'(a,l4)'  )'  -f...  Display f(v) etc               [',ltestnofx
+    write(*,'(a,l4)'  )'  -m...  Multi-T,n scan                 [',lfvden
     write(*,'(a,l4)'  )'  -x...  Plot f(v) explanation          [',lexplain
+    write(*,'(a,l4)'  )'  -d...  Other density algorithm toggle [',ldenalt
+    write(*,'(a,l4)'  )'  -o...  f(v) overlay plot toggle       [',lfover
     write(*,'(a,l4)'  )'  -w...  Postscript write (0,3,-3)      [',pfint
     write(*,'(a,2f6.2)')'  -v...  Set vh range                   [',vhmin,vhmax
     call exit
@@ -69,28 +76,42 @@ subroutine finddenofx
 ! delF/delx (arrays of x), for the current vh and other parameters. 
   deninteg=0.
   dFdelx=0.
+  dpdr=0.
   dx=2.*xmax/(npts-1.)
+  ximid=npts/2+.5*mod(npts+1,2)
   do i=1,npts
-!     x(i)=-xmax+2.*xmax*(i-1.)/(npts-1.)
-     x(i)=-xmax+(i-1.)*dx
+!     x(i)=-xmax+(i-1.)*dx
+     x(i)=(i-ximid)*dx     ! Symmetrized x version
      isigma=int(sign(1.,x(i)))
      dph=isigma*delphi/2.
-     xcor=x(i)/4.
+     xcor=abs(x(i)/4.)
 !     xcor=x(i)/4./sqrt(1.-dph/phimax)  !Symmetrizes curvature at origin.
      phiofx(i)=(phimax-dph)/cosh(xcor)**4+dph
      if(ldenalt)then   ! This density must be consistent with delphi.
-        call denhill(nc,dc,vs-vh,vt,vh,phimax,phiofx(i),isigma,nofv,denofx(i))
+        call denhill(nc,dc,vs-vh,vt,vh,phimax,phiofx(i),isigma,nofv&
+             &,denofx(i),dendiff)
      else
         call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiofx(i),isigma,local, &
              nofv,vofv,fofv,Pfofv)
         denofx(i)=Pfofv(nofv)
      endif
-     if(i.gt.1)deninteg(i)=deninteg(i-1)+&      !\int n dphi
-          (denofx(i)+denofx(i-1))*(phiofx(i)-phiofx(i-1))*.5
-     if(i.gt.1)dFdelx(i)=dFdelx(i-1)-&          !-\int (dn/dx) dphi
+     if(i.eq.1)then
+        deninteg(i)=denofx(i)*(phiofx(i)-dph)
+     else
+        deninteg(i)=deninteg(i-1)+&      !\int n dphi
+             (denofx(i)+denofx(i-1))*(phiofx(i)-phiofx(i-1))*.5
+     endif
+     if(i.eq.1)then
+        dFdelx(i)=-denofx(i)*(phiofx(i)-phiofx(i-1))/(x(i)-x(i-1))
+     else
+        dFdelx(i)=dFdelx(i-1)-&          !-\int (dn/dx) dphi
           (denofx(i)-denofx(i-1))*(phiofx(i)-phiofx(i-1)) &
           /(x(i)-x(i-1))
+     endif
+!     if(x(i).gt.0)write(*,*)i,x(i),x(1+npts-i)   ! Show symmetry.
+!     if(x(i).gt.0)write(*,*)i,x(i),x(1+npts-i),phiofx(i),phiofx(1+npts-i)
   enddo
+  deninteg(npts)=deninteg(npts)-denofx(npts)*(phiofx(npts)-dph)
   if(lcd)write(*,'(a,f8.5,a,f9.5,a,f9.5,a,f9.5)')'vh=',vh,' delphi=',delphi,&
        ' Ion force=',-deninteg(npts),' delF/delx=',dFdelx(npts)
 end subroutine finddenofx
@@ -98,55 +119,103 @@ end subroutine finddenofx
 subroutine finddelphi
 ! Iterate to find delphi consistent with specified ion distributions.
   real, dimension(2) :: deninf
-  integer, parameter :: niter=10
-  real, dimension(niter) :: residit
+  integer, parameter :: niter=15
+  real, dimension(niter) :: residit,delphiit
   if(lcd)write(*,*)'j   dpp       delphi      delphi-dpp    n(-)        n(+)',&
        '   resid'
   lfdconv=.false.
   dpp=delphi
   ddp=0.
-  residp=0.
-  do j=1,niter
+  resid=0.
+  do jit=1,niter
+     residp=resid
      do i=1,2
         isigma=-3+2*i
         phiinf=isigma*delphi/2.
         if(ldenalt)then ! Alternative ni calculation.
-           call denhill(nc,dc,vs-vh,vt,vh,phimax,phiinf,isigma,nofv,deninf(i))
+           call denhill(nc,dc,vs-vh,vt,vh,phimax,phiinf,isigma,nofv&
+                &,deninf(i),dendiff)
         else
            call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phiinf,isigma,local,&
                 nofv,vofv,fofv,Pfofv)
-!           write(*,'(a,i4,5f10.6)')'Findelphi',j,phiinf,deninf(i),Pfofv(nofv)
+!           write(*,'(a,i4,5f10.6)')'Findelphi',jit,phiinf,deninf(i),Pfofv(nofv)
            deninf(i)=Pfofv(nofv)
+           if(i.eq.2)dendiff=deninf(2)-deninf(1)
         endif
      enddo
-     resid=(alog(deninf(2)/deninf(1))-delphi/Te)
-     residit(j)=resid
-     if(j.eq.1)then
+     resid=alog(1.+dendiff/deninf(1))-delphi/Te
+!        resid=(alog(deninf(2)/deninf(1))-delphi/Te)
+     residit(jit)=resid
+     if(jit.eq.1)then
         delphi=delphi+.5*resid*min(1.,Te)
      else
         if((resid-residp).eq.0)then
-           write(*,'(a,i3,5e12.4)')'resid unchanged',j,resid,delphi,dpp,ddp
+           write(*,'(a,i3,5e12.4)')'resid unchanged',jit,resid,delphi,dpp,ddp
+           dpp=delphi
            delphi=delphi+.5*resid*min(1.,Te)
         else
-           ddp=resid*(delphi-dpp)/(resid-residp)
+           dpdr=(delphi-dpp)/(resid-residp)
+           ddp=resid*dpdr
+           dpp=delphi
+           delphi=delphi-sign(min(abs(ddp),phimax/2.),ddp)
         endif
-        dpp=delphi
-!        delphi=delphi-ddp
-        delphi=delphi-sign(min(abs(ddp),phimax/2.),ddp)
      endif
-     if(lcd)write(*,'(i2,6f11.7)')j,dpp,delphi,delphi-dpp,deninf,resid
-     if(abs(resid).lt.0.5e-6)then
+     delphiit(jit)=delphi
+     if(lcd)write(*,'(i2,6f11.7)')jit,dpp,delphi,delphi-dpp,deninf,resid
+     if(abs(resid).lt.0.1e-6)then
         lfdconv=.true.
         goto 2
      endif
-     residp=resid
   enddo
-  write(*,'(a,7f11.7)')'finddelphi unconverged',resid,residp,delphi,dpp,ddp
-!  write(*,'(10f8.4)')residit
+  if(.not.abs((delphi-dpp)/delphi).lt.1.e-10)then
+     write(*,*)'finddelphi unconverged. residit,delphiit:'
+     write(*,'(5f11.7)')(residit(j),j=1,niter)
+     write(*,'(5f11.7)')(delphiit(j),j=1,niter)
+     write(*,'(a,7f11.7)')' delphi,dpp,ddp',delphi,dpp,ddp
+     call automark(residit(1),delphiit(1),niter-1,1)
+     call pltend
+  endif
 2 continue
   denave=deninf(1)*exp(0.5*delphi/Te)
-!delphi=0.
+!  denave=(deninf(1)+deninf(2))/2.   ! Makes very little difference.
 end subroutine finddelphi
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine findforce
+! Integrate the intrinsic ion force symmetrically over phi>abs(delphi/2)
+! giving \int dendiff d\phi, from phimax to abs(delphi/2.)
+  npt2=npts/2
+  diffint=0.
+  dendiffp=0.
+  phip=0
+! Instrinsic ion force
+  do i=1,npt2
+     phi=(phimax-abs(delphi/2.))/(npt2-1.)*(npt2-i)
+     do j=1,2         ! dendiff between positive and negative isigma
+        isigma=-3+2*j
+        call denhill(nc,dc,vs-vh,vt,vh,phimax,phi,isigma,nofv,denhere,dendiff)
+     enddo
+     diffint=diffint-(dendiff+dendiffp)*0.5*(phi-phip)  !Ion force integral.
+     phip=phi
+     dendiffp=dendiff
+  enddo
+! Extrinsic ion force. Maybe?
+if(.false.)then
+  do i=1,npt2
+     phi=abs(delphi/2)*(1.-2.*(i-1.)/(npt2-1))
+     isigma=-nint(sign(1.,delphi))
+     call denhill(nc,dc,vs-vh,vt,vh,phimax,phi,isigma,nofv,denhere,dendiff)
+     diffint=-(dendiff+dendiffp)*0.5*(phi-phip)  !Ion force integral.
+     phip=phi
+     dendiffp=dendiff
+  enddo
+endif   
+! Extrinsic i-e force difference. 
+! Naively the ion density times \delphi using neutrality
+! balanced against the electron pressure difference. 
+  Fext=denave*(-(1.-delphi/(2.*Te))*delphi+Te*2.*sinh(delphi/(2.*Te)))
+  Forcediff=diffint + Fext
+!  write(*,*)'findforce',Forcediff,delphi,diffint,Fext
+end subroutine findforce
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine scanvh(index)
 ! Scan vhmin to vhmax to construct arrays of F and delF/delx
@@ -163,30 +232,36 @@ subroutine scanvh(index)
   vht=vhd/3.
   vh1=0
   vh2=0
-  do j=1,3            ! Iterate for refinement of vh0
+  do j=1,4           ! Iterate for refinement of vh0
      Force=0.
      Fmax=0.
      vh=vhn
      indexref=0
      do i=1,nvh          ! Scan over the current range
         vhprior=vh
+        fvh0prior=fvh0
         delphiprior=delphi
         Fprior=Force
         vh=vhn+(i-1.)*(vhx-vhn)/(nvh-1.)
         lcd=.false.
         call finddelphi
-        call finddenofx
-        Force=-deninteg(npts) &
-             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
-!        if(lfdconv &
-        if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
+        if(lfindforce)then
+           call findforce
+           Force=Forcediff
+        else
+           call finddenofx
+           Force=-deninteg(npts) &
+                +denave*Te*2.*sinh(delphi/(2.*Te))
+!             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
+           endif
+           if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
              .and.Fprior.gt.0.and.Force.lt.0..and.indexref.eq.0)then
            indexref=i
            vh0=(vhprior*abs(Force)+vh*abs(Fprior))/ &
                 (abs(Fprior)+abs(Force))
            delphi0=(delphiprior*abs(Force)+delphi*abs(Fprior))/ &
                 (abs(Fprior)+abs(Force))
-           delphi0=delphi
+!           delphi0=delphi
            vh1=vhprior
            vh2=vh
         endif
@@ -211,7 +286,7 @@ subroutine scanvh(index)
            enddo
         endif
      enddo
-!     write(*,*)'vh0 etc',vh0,Force,delphi0,deninteg(npts)
+     write(*,*)'vh0, F, dp',vh0,Force,delphi0,deninteg(npts)
      if(indexref.gt.1)then  ! Refine the equilibrium vh0.
         vhn=vh1
         vhx=vh2
@@ -383,7 +458,7 @@ subroutine otherxofphi  ! Solve Poisson's equation on the other side.
 !  write(*,*)'isigma,nextra,delphi',isigma,nextra,delphi
   do i=-nextra,-1
      phiofi(i)=i*phistep
-     edenofphi(i)=exp((phiofi(i)+abs(delphi)/2.)/Te) ! Maxwellian e-density
+     edenofphi(i)=denave*exp((phiofi(i)+abs(delphi)/2.)/Te) ! Maxwellian ne.
   enddo  ! phiofi is now the full potential relative to first side's phiinfty.
   do i=-nextra,nphi
      phiofi(i)=phiofi(i)+abs(delphi) ! Refer to this side for denionhill.
@@ -433,37 +508,115 @@ subroutine otherxofphi  ! Solve Poisson's equation on the other side.
 end subroutine otherxofphi
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine plotfvden
-call multiframe(2,4,0)
-call dcharsize(.025,.025)
-call pltinit(vha(1),vha(nvh),0.,0.5)
-call ticlabtog
-call axis
-call ticlabtog
-call axis2
-call polyline(vha,fofvh,nvh)
-call legendline(.05,.9,258,'!Bf!di!A;!@!d(!Bv!@!d!A;!@!d)')
-call legendline(.85,.08,258,'!Bv!@!d!A;!@!d')
-call legendline(.05,.8,258,'0.4')
-if(dFdx0.lt.0)call polymark(vh0,fvh0,1,10)
+! For 2 components with symmetric velocities +-(vsin(1)+vt(2))
+! Scan the second component's density n2 and temperature T2 (=vt(2)^2),
+! plotting in a 2D multiframe arrangement the f(v) and ni(x)
+! for psi values psimax*10^{-(i-1)} for i=1,npscan
+nn2=3
+nT2=3
+npscan=3
+den2max=0.5
+T2max=1.
+phimxin=phimax
+vs1in=vs(1)
+vs2in=vs(2)
+vt1in=vt(1)
+ncin=nc
+nc=2
 
-call setframe(2)
-call minmax(denofx,npts,dmin,dmax)
-call fitrange(dmin,dmax,3,ipow,fac10,delta,first,xlast)
-call pltinit(x(1),x(npts),first,xlast)
-call ticlabtog
-call axis
-call ticlabtog
-call axis2
-do i=1,2
-   yl=first+i*delta
-   call fwrite(yl,iwidth,3,string)
-   call jdrwstr(wx2nx(x(npts)),wy2ny(yl),string(1:iwidth),-1.2)
+call multiframe(nn2,2*nT2,0)
+call dcharsize(.025,.025)
+do k=1,nT2
+   T2=T2max*(0.2+0.8/max(nT2-1,1)*(k-1))
+   vt(1)=1.
+   vt(2)=sqrt(T2)
+   vs(1)=vs1in+vt(2)
+   vs(2)=-vs(1)
+   if(k.gt.1)write(*,*)
+   write(*,'(a,2f10.4,a,$)')'vs(1),vt(2)',vs(1),vt(2),',   dc(2)'
+   do j=1,nn2
+      den2=den2max*(0.2+0.8/max(nn2-1,1)*(nn2-j))
+      dc(2)=den2
+      dc(1)=1.-den2
+      write(*,'(f10.4,$)')dc(2)
+      do i=1,npscan
+         phimax=phimxin/10.**(i-1)
+         call fwrite(T2,iwidth,1,argument)
+         string='T!d2!d='
+         string(lentrim(string)+1:)=argument(1:iwidth)
+         call scanvh(index)
+! Left subframe
+         iframe=(mod(j-1,nn2)+2*nn2*(k-1))
+         call setframe(iframe)
+         if(i.eq.1)then
+            call pltinit(vha(1),vha(nvh),0.,0.5)
+         else
+            call scalewn(vha(1),vha(nvh),0.,0.5,.false.,.false.)
+         endif
+         call ticlabtog
+         call axis
+         call ticlabtog
+         call legendline(.15,.9,258,'!Bf!di!A;!@!d(!Bv!@!d!A;!@!d)')
+         call legendline(.6,.08,258,'!Bv!@!d!A;!@!d')
+         call legendline(.05,.8,258,'0.4')
+         if(j.eq.nn2)call legendline(.8,-.1,258,string)
+         if(i.eq.1)call polyline(vha,fofvh,nvh)
+         call color(i)
+         if(dFdx0.lt.0)call polymark(vh0,fvh0,1,10)
+         call color(15)
+         call fwrite(den2,iwidth,1,argument)
+         string='n!d2!d='
+         string(lentrim(string)+1:)=argument(1:iwidth)
+         if(k.eq.1)call legendline(-.5,0.5,258,string)
+
+! Right subframe
+         call setframe(iframe+nn2)
+         if(i.eq.1)then
+            denmax=0.6
+            denmin=-0.2
+            dendelta=-2*denmin
+            call fitrange(denmin,denmax,3,ipow,fac10,delta,first,xlast)
+         endif
+!         call pltinit(x(1),x(npts),first,xlast)
+         call pltinit(x(1),x(npts),denmin-.05,denmax)
+         call ticlabtog
+         call xaxis(0.,0.)
+         call ticlabtog
+         call axptset(1.,0.)
+         call ticrev
+         call yaxis(first,delta)
+         call ticrev
+         call axptset(0.,0.)
+         call axbox
+!         call legendline(-.2,.65,258,string)
+         do ii=1,2   ! y-axis scale
+            yl=denmin+(i-1)*dendelta
+            if(yl.lt..8*denmax)then
+               call fwrite(yl,iwidth,1,string)
+               call jdrwstr(wx2nx(x(npts)),wy2ny(yl),string(1:iwidth),-1.4)
+            endif
+         enddo
+         call color(i)
+         if(dFdx0.lt.0)call polyline(x,(denofx-1)/phimax,npts)
+         call fwrite(phimax,iwidth,3,string)
+         if(j.eq.1.and.k.eq.i)call legendline(-.2,1.1,0,' !Ay!@='&
+              &//string(1:iwidth))
+         call color(15)
+         call jdrwstr(wx2nx(x(npts)),wy2ny(.85*denmax)&
+              &,'[!Bn!di!@!d(!Bx!@)-1]/!Ay!@!@',-1.2)
+         call legendline(.4,.08,258,'!Bx!@')
+      enddo
+   enddo
 enddo
-call polyline(x,denofx,npts)
-call jdrwstr(wx2nx(x(npts)),wy2ny(.1*first+.9*xlast),'!Bn!di!@!d(!Bx!@)!@',-1.2)
-call legendline(.9,.08,258,'!Bx!@')
 call multiframe(0,0,0)
+write(*,*)
+phimax=phimxin
+vs(1)=vs1in
+vs(2)=vs2in
+vt(1)=vt1in
+
 end subroutine plotfvden
+         
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine plotdenofx
 ! Plot phi,ni,V of x.
@@ -596,6 +749,14 @@ end subroutine plotexplain
      if(isigma.eq.-1)call axlabels('','P(v)=!AJ!@f(v)dv')
      if(isigma.eq.+1)call axlabels('v-v!dh!d','P(v)=!AJ!@f(v)dv')
   enddo
+  if(lfover)then ! Overplot on frame 1 the f of frame 3.
+     call setframe(2) ! Ensure the autoinit does not clear frames.
+     call autoinit(vofv,fofv,nofv) ! Set scaling
+     call setframe(0) ! Set to plot on frame 1.
+     call dashset(4)
+     call polyline(vofv,fofv,nofv)
+     call dashset(0)
+  endif
   call multiframe(0,0,0)
   call pltend
 end subroutine plotfvhill
@@ -815,12 +976,14 @@ end subroutine fvhill
 ! All velocities are relative to the hill's rest frame.
 ! On exit:
 ! theden is the integral of fv dv. I.e. the density
+! dendiff is the difference between this theden and the last.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden)
-  real :: dc(nc),vs(nc),vt(nc),phimax,phi,theden
+subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden,dendiff)
+  implicit double precision (a-h,o-z)
+  real :: dc(nc),vs(nc),vt(nc),phimax,phi,theden,vh,dendiff
   integer :: isigma,nofv
-
-  
+  double precision :: dtheden=0.
+  one=1.
   if(isigma.ne.1.and.isigma.ne.-1)stop 'isigma must be +-1'
   phix2=2.*phi
   phimx2=2.*phimax
@@ -830,7 +993,8 @@ subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden)
   sqtwopi=sqrt(2.*3.1415926)
   nvhere=nofv+1-mod(nofv,2) ! Odd number of points so thresh is at (nvhere+1)/2
   ithresh=(nvhere+1)/2
-  theden=0.
+  ddenlast=dtheden
+  dtheden=0.
   fim=0.
   vm=(ithresh-1)*(-vmax-vthresh)/(ithresh-1.)+vthresh
   do i=1,nvhere
@@ -839,11 +1003,11 @@ subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden)
      else                  ! vthresh to +-vmax
         vi=(i-ithresh)*(vmax-vthresh)/(nvhere-ithresh)+vthresh
      endif
-     vsign=sign(1.,vi)
+     vsign=sign(one,vi)
      enx2=phix2+vi**2
      if(i.eq.ithresh)then  ! Crossing threshold. Use prior sign this step
         vinf=sign(sqrt(max(0.,enx2)),vinf)
-     elseif(int(vsign).ne.isigma)then        ! Moving inward
+     elseif(nint(vsign).ne.isigma)then        ! Moving inward
         vinf=vsign*sqrt(max(0.,enx2))        
      elseif(enx2.gt.phimx2)then              ! Passing
         vinf=vsign*sqrt(max(0.,enx2))
@@ -854,7 +1018,7 @@ subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden)
      do j=1,nc   ! Sum over maxwellian components.
         fi=fi+dc(j)*exp(-0.5*(vinf-vs(j))**2/vt(j)**2)/(vt(j)*sqtwopi)
      enddo
-     theden=theden+ (fim+fi)*0.5*(vi-vm)
+     dtheden=dtheden+ (fim+fi)*0.5*(vi-vm)
      vinf=-vinf
      if(i.eq.ithresh)then   ! Set the new prior fi for next step
         fi=0.
@@ -866,6 +1030,8 @@ subroutine denhill(nc,dc,vs,vt,vh,phimax,phi,isigma,nofv,theden)
      fim=fi
      vm=vi
   enddo
+  dendiff=real(dtheden-ddenlast)
+  theden=real(dtheden)
 end subroutine denhill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Return the ion density at a potential phiminf relative to phiinf on
@@ -874,7 +1040,8 @@ real function denionhill(phiminf)
   use AsymHill
   phimzero=phiminf+isigma*delphi/2.
   if(ldenalt)then   ! This density must be consistent with delphi.
-     call denhill(nc,dc,vs-vh,vt,vh,phimax,phimzero,isigma,nofv,denionhill)
+     call denhill(nc,dc,vs-vh,vt,vh,phimax,phimzero,isigma,nofv&
+          &,denionhill,dendiff)
   else
      call fvhill(nc,dc,vs-vh,vt,phimax,delphi,phimzero,isigma,local, &
           nofv,vofv,fofv,Pfofv)
@@ -914,9 +1081,9 @@ call scanspacing
 call forceplotns
 endif
 
-
-call scanvh(index)
+if(lfvden)then
 call plotfvden
 call pltend
+endif
 
 end program Asym
