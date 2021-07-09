@@ -1,11 +1,12 @@
 module AsymHill
-  integer, parameter :: npts=200,nofv=200,nvh=100,ncmax=4,nsmax=20
+  integer, parameter :: npts=200,nofv=200,nvh=100,ncmax=4,nsmax=20,npsi=10
   real, dimension(npts) :: x,phiofx,denofx,deninteg,dFdelx
   real, dimension(nofv) :: vofv,fofv,Pfofv,Forceofv
   real, dimension(nvh) :: vha,Forcevh,delFdxvh,dphivh,fofvh
-  real, dimension(ncmax) :: vs=[1.5,-1.5,0.,0.],vt=1.,dc=[1.,.5,0.,0.],vss
+  real, dimension(ncmax) :: vs=[1.6,-1.6,0.,0.],vt=1.,dc=[.7,.3,0.,0.],vss
   real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns,delphins
+  real, dimension(npsi) :: psia,delpha,analdp
   real :: delphi,phimax=.2,phi=.1,xmax=12.,delphi0,Forcediff
   integer :: jit
   character*30 string,argument
@@ -13,7 +14,9 @@ module AsymHill
   integer :: index,nc=2,ns=1,pfint=0,isigma
   logical :: local=.false.,lcd=.true.,ltestnofx=.false.,ldenion=.false.
   logical :: lrefinethreshold=.true.,lfdconv,lexplain=.false.
-  logical :: ldenalt=.true.,lfvden=.false.,lfover=.false.,lfindforce=.true.
+  logical :: ldenalt=.true.,lfvden=.false.,lfover=.false.,lfindforce=.false.
+! lfindforce breaks some things at the moment.        
+  logical :: ldscale=.false.
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -40,6 +43,7 @@ contains
        if(argument(1:2).eq.'-x')lexplain=.not.lexplain
        if(argument(1:2).eq.'-d')ldenalt=.not.ldenalt
        if(argument(1:2).eq.'-o')lfover=.not.lfover
+       if(argument(1:2).eq.'-a')ldscale=.not.ldscale
        if(argument(1:2).eq.'-h')goto 120
        if(argument(1:2).eq.'-v')read(argument(3:),*,end=102)vhmin,vhmax
        if(argument(1:2).eq.'-w')then
@@ -65,6 +69,7 @@ contains
     write(*,'(a,l4)'  )'  -x...  Plot f(v) explanation          [',lexplain
     write(*,'(a,l4)'  )'  -d...  Other density algorithm toggle [',ldenalt
     write(*,'(a,l4)'  )'  -o...  f(v) overlay plot toggle       [',lfover
+    write(*,'(a,l4)'  )'  -a...  delphi scale analysis          [',ldscale
     write(*,'(a,l4)'  )'  -w...  Postscript write (0,3,-3)      [',pfint
     write(*,'(a,2f6.2)')'  -v...  Set vh range                   [',vhmin,vhmax
     call exit
@@ -232,7 +237,8 @@ subroutine scanvh(index)
   vht=vhd/3.
   vh1=0
   vh2=0
-  do j=1,4           ! Iterate for refinement of vh0
+  nref=1
+  do j=1,nref           ! Iterate for refinement of vh0
      Force=0.
      Fmax=0.
      vh=vhn
@@ -253,19 +259,19 @@ subroutine scanvh(index)
            Force=-deninteg(npts) &
                 +denave*Te*2.*sinh(delphi/(2.*Te))
 !             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
-           endif
-           if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
-             .and.Fprior.gt.0.and.Force.lt.0..and.indexref.eq.0)then
+        endif
+        if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
+             .and.Fprior.gt.0.and.Force.lt.0..and.index.eq.0)then
            indexref=i
            vh0=(vhprior*abs(Force)+vh*abs(Fprior))/ &
                 (abs(Fprior)+abs(Force))
            delphi0=(delphiprior*abs(Force)+delphi*abs(Fprior))/ &
                 (abs(Fprior)+abs(Force))
-!           delphi0=delphi
            vh1=vhprior
            vh2=vh
         endif
         if(j.eq.1)then    ! Store coarse scan.
+           if(lfindforce)call finddenofx ! Needed for dFdelx at the moment.
            vha(i)=vh
            dphivh(i)=delphi
            Forcevh(i)=Force
@@ -286,7 +292,7 @@ subroutine scanvh(index)
            enddo
         endif
      enddo
-     write(*,*)'vh0, F, dp',vh0,Force,delphi0,deninteg(npts)
+!     write(*,*)'vh0, F, dp',vh0,Force,delphi0
      if(indexref.gt.1)then  ! Refine the equilibrium vh0.
         vhn=vh1
         vhx=vh2
@@ -295,8 +301,38 @@ subroutine scanvh(index)
         exit ! from refinement j-loop.
      endif
   enddo
-!  write(*,*)vh0,index,vha(index-1),vha(index),Forcevh(index-1),Forcevh(index)
+  if(indexref.gt.1.and.nref.eq.1)then  ! Refine the equilibrium vh0.
+     vhn=vh1
+     vhx=vh2
+     do i=1,23
+!        write(*,*)'vhn,vhx,Frc',vhn,vhx,Forcediff
+        call bisectvh(vhn,vhx)
+     enddo
+     delphi0=delphi
+  endif
 end subroutine scanvh
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine bisectvh(vhn,vhx)
+  ! Given vhn and vhx at which Force is +ve and -ve, bisect to find
+  ! a better pair.
+  vh=(vhn+vhx)/2.
+  vh0=vh
+  call finddelphi
+  if(lfindforce)then
+     call findforce
+     Force=Forcediff
+  else
+     call finddenofx
+     Force=-deninteg(npts) &
+          +denave*Te*2.*sinh(delphi/(2.*Te))
+!             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
+  endif
+  if(Force.lt.0.)then
+     vhx=vh
+  else
+     vhn=vh
+  endif
+end subroutine bisectvh
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine scanspacing
 ! Iterate scanvh calls over different spacings  
@@ -506,6 +542,25 @@ subroutine otherxofphi  ! Solve Poisson's equation on the other side.
   call dashset(0)
   call pltend
 end subroutine otherxofphi
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+real function f1prime(v)
+  f1prime=0.
+  do i=1,nc
+     vdiff=(v-vs(i))
+     f1prime=f1prime-dc(i)*vdiff/vt(i)**3*exp(-(vdiff/(vt(i)))**2/2.)
+  enddo
+  f1prime=f1prime/sqrt(2.*3.1415926)
+end function f1prime
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+real function f3prime(v)
+  f3prime=0.
+  do i=1,nc
+     vdiff=(v-vs(i))
+     f3prime=f3prime+dc(i)*(3.-(vdiff/vt(i))**2)*vdiff*dc(i)/vt(i)**5&
+          *exp(-(vdiff/(vt(i)))**2/2.)
+  enddo
+  f3prime=f3prime/sqrt(2.*3.1415926)
+end function f3prime
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine plotfvden
 ! For 2 components with symmetric velocities +-(vsin(1)+vt(2))
@@ -1056,15 +1111,34 @@ use AsymHill
 call parseAsymargs
 call initvofv
 
-if(.false.)then
-! Testing force calculation
-!vh=5.e-6
-call finddenofx
-do i=1,npts/2
-write(*,*)i,denofx(i)-denofx(npts+1-i),deninteg(i),deninteg(npts+1-i)
-enddo
-call finddelphi
-! This shows that we are in rounding noise at moderately low psi.
+if(ldscale.and..not.ltestnofx)then
+   phimaxin=phimax
+   do i=1,npsi
+      phimax=phimaxin*(float(i)/npsi)**2
+      call scanvh(index)
+! Find dn/dphi      
+      isigma=-nint(sign(1.,delphi0))
+      dphi=0.02*phimax
+      call denhill(nc,dc,vs,vt,vh,phimax,0.,isigma,nofv,theden,dendiff)
+      call denhill(nc,dc,vs,vt,vh,phimax,dphi,isigma,nofv,otherden,dendiff)
+      dnidphi=dendiff/dphi
+      write(*,*)'dnidphi,Te=',dnidphi,Te
+      psia(i)=phimax
+      delpha(i)=delphi0
+      f3p=f3prime(vh0)
+      sigmaD=sign(1.,delphi0)
+      Ts=2.3*Te
+      analdp(i)=sigmaD*phimax*(1.-sqrt(1.-sigmaD*2.*Ts/3.*f3p*phimax))
+      write(*,'(a,6f10.6)')'psi, vh0, Fdiff, dp',phimax,vh0,Forcediff,delphi0&
+           ,analdp(i),f3p
+   enddo
+!   call autoplot(psia,delpha,npsi)
+   call lautoplot(psia,abs(delpha),npsi,.true.,.true.)
+   call axlabels('!Ay!@','!ADf!@')
+   call color(4)
+   call polyline(psia,abs(analdp),npsi)
+   call pltend
+   call exit
 endif
 
 if(ltestnofx)then
