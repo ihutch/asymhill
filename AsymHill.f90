@@ -3,11 +3,13 @@ module AsymHill
   real, dimension(npts) :: x,phiofx,denofx,deninteg,dFdelx
   real, dimension(nofv) :: vofv,fofv,Pfofv,Forceofv
   real, dimension(nvh) :: vha,Forcevh,delFdxvh,dphivh,fofvh
+  real, dimension(nvh) :: analFrci,analdendiff,analdendift
+  real, dimension(nvh) ::  directddiff,directddift
   real, dimension(ncmax) :: vs=[1.6,-1.6,0.,0.],vt=1.,dc=[.7,.3,0.,0.],vss
   real, dimension(nvh,nsmax) :: Fcvhns,dFvhns,fvvhns,dpvhns
   real, dimension(nsmax) :: fv0ns,dF0ns,vh0ns,delphins
   real, dimension(npsi) :: psia,delpha,analdp
-  real :: delphi,phimax=.2,phi=.1,xmax=12.,delphi0,Forcediff
+  real :: delphi,phimax=.2,phi=.1,xmax=12.,delphi0,Forcediff,dendiff,diffint
   integer :: jit
   character*30 string,argument
   real :: vh=0.,Te=1.,denave,vh0,fvh0,dFdx0,vhmin=-4.,vhmax=4.,vhn,vhx,vh0r
@@ -16,7 +18,7 @@ module AsymHill
   logical :: lrefinethreshold=.true.,lfdconv,lexplain=.false.
   logical :: ldenalt=.true.,lfvden=.false.,lfover=.false.,lfindforce=.false.
 ! lfindforce breaks some things at the moment.        
-  logical :: ldscale=.false.
+  logical :: ldscale=.false.,ltesting=.false.
 ! BKGint arrays etc. Reminder u is v/sqrt(2). 
   integer, parameter :: nphi=200
   real, dimension(-nphi:nphi) :: phiofi,xofphi,edenofphi,Vminus,x2ofphi
@@ -44,6 +46,7 @@ contains
        if(argument(1:2).eq.'-d')ldenalt=.not.ldenalt
        if(argument(1:2).eq.'-o')lfover=.not.lfover
        if(argument(1:2).eq.'-a')ldscale=.not.ldscale
+       if(argument(1:2).eq.'-b')lfindforce=.not.lfindforce
        if(argument(1:2).eq.'-h')goto 120
        if(argument(1:2).eq.'-v')read(argument(3:),*,end=102)vhmin,vhmax
        if(argument(1:2).eq.'-w')then
@@ -70,6 +73,7 @@ contains
     write(*,'(a,l4)'  )'  -d...  Other density algorithm toggle [',ldenalt
     write(*,'(a,l4)'  )'  -o...  f(v) overlay plot toggle       [',lfover
     write(*,'(a,l4)'  )'  -a...  delphi scale analysis          [',ldscale
+    write(*,'(a,l4)'  )'  -b...  Use findforce                  [',lfindforce
     write(*,'(a,l4)'  )'  -w...  Postscript write (0,3,-3)      [',pfint
     write(*,'(a,2f6.2)')'  -v...  Set vh range                   [',vhmin,vhmax
     call exit
@@ -190,18 +194,18 @@ subroutine findforce
 ! giving \int dendiff d\phi, from phimax to abs(delphi/2.)
   npt2=npts/2
   diffint=0.
-  dendiffp=0.
+  dendiff=0.
   phip=0
 ! Instrinsic ion force
   do i=1,npt2
-     phi=(phimax-abs(delphi/2.))/(npt2-1.)*(npt2-i)
+     dendiffp=dendiff
+     phi=(phimax-abs(delphi/2.))/(npt2-1.)*(npt2-i)+abs(delphi/2.)
      do j=1,2         ! dendiff between positive and negative isigma
         isigma=-3+2*j
         call denhill(nc,dc,vs-vh,vt,vh,phimax,phi,isigma,nofv,denhere,dendiff)
      enddo
      diffint=diffint-(dendiff+dendiffp)*0.5*(phi-phip)  !Ion force integral.
      phip=phi
-     dendiffp=dendiff
   enddo
 ! Extrinsic ion force. Maybe?
 if(.false.)then
@@ -217,7 +221,8 @@ endif
 ! Extrinsic i-e force difference. 
 ! Naively the ion density times \delphi using neutrality
 ! balanced against the electron pressure difference. 
-  Fext=denave*(-(1.-delphi/(2.*Te))*delphi+Te*2.*sinh(delphi/(2.*Te)))
+  Fext=denave*(-delphi+Te*2.*sinh(delphi/(2.*Te)))
+!  write(*,*)'vh,denave,Fext',vh,denave,Fext
   Forcediff=diffint + Fext
 !  write(*,*)'findforce',Forcediff,delphi,diffint,Fext
 end subroutine findforce
@@ -251,6 +256,7 @@ subroutine scanvh(index)
         vh=vhn+(i-1.)*(vhx-vhn)/(nvh-1.)
         lcd=.false.
         call finddelphi
+           call analcomp(i)
         if(lfindforce)then
            call findforce
            Force=Forcediff
@@ -259,6 +265,9 @@ subroutine scanvh(index)
            Force=-deninteg(npts) &
                 +denave*Te*2.*sinh(delphi/(2.*Te))
 !             +denave*Te*(exp(delphi/(2.*Te))-exp(-delphi/(2.*Te)))
+! Fill in diffint for intrinsic force diff. For testing
+           Fext=denave*(-delphi+Te*2.*sinh(delphi/(2.*Te)))
+           diffint=Force - Fext
         endif
         if(vhd-abs(vh-vhm).gt.vht  &    ! Not too near the ends
              .and.Fprior.gt.0.and.Force.lt.0..and.index.eq.0)then
@@ -556,7 +565,7 @@ real function f3prime(v)
   f3prime=0.
   do i=1,nc
      vdiff=(v-vs(i))
-     f3prime=f3prime+dc(i)*(3.-(vdiff/vt(i))**2)*vdiff*dc(i)/vt(i)**5&
+     f3prime=f3prime+dc(i)*(3.-(vdiff/vt(i))**2)*vdiff/vt(i)**5&
           *exp(-(vdiff/(vt(i)))**2/2.)
   enddo
   f3prime=f3prime/sqrt(2.*3.1415926)
@@ -663,6 +672,7 @@ do k=1,nT2
       enddo
    enddo
 enddo
+call pltend
 call multiframe(0,0,0)
 write(*,*)
 phimax=phimxin
@@ -828,7 +838,9 @@ subroutine forcedivplot
   call legendline(.9,.9,258,'(a)')
   if(dFdx0.lt.0)call polymark(vh0,fvh0,1,10)
    ! Electron force
-  call autoplot(vha,denave*Te*(exp(dphivh/(2.*Te))-exp(-dphivh/(2.*Te))),nvh)
+! denave is not really correct here. It is just the last value. Wrong.
+!  call autoplot(vha,denave*Te*2.*sinh(dphivh/(2.*Te)),nvh)
+  call autoplot(vha,Te*2.*sinh(dphivh/(2.*Te)),nvh)
   call axlabels('','Forces(v!dh!d)')
   call legendline(.6,-.1,258,'v!dh!d')
   call axis2
@@ -843,8 +855,28 @@ subroutine forcedivplot
   call color(2)
   call polyline(vha,-denave*dphivh/Te+Forcevh,nvh)   ! Ion force
   call legendline(.05,.9,0,'F!di!d')
+  if(ltesting)then
+     call winset(.false.)
+     call color(4)
+     call polyline(vha,analFrci,nvh)  ! Analytic total force.
+     call legendline(.95,.8,0,'analFrci')
+     call color(5)
+     call polyline(vha,Te*analdendift,nvh)  ! Analytic Density difference.
+     call legendline(.95,.6,0,'analdendift')
+     call color(6)
+     call polyline(vha,Te*directddift,nvh)  ! Direct density difference
+     call legendline(.95,.4,0,'directdendift')
+  endif
   call pltend
+  call color(15)
   call multiframe(0,0,0)
+  if(ltesting)then
+     call autoplot(vha,analdendiff,nvh)
+     call axlabels('vh','delta-n intrinsic')
+     call color(1)
+     call polyline(vha,directddiff,nvh)
+     call pltend
+  endif
 end subroutine forcedivplot
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine forceplotns
@@ -882,6 +914,8 @@ subroutine forceplotns
      call polyline(vha,Fcvhns(1:nvh,i)/phimax**2,nvh)      ! Total force
      if(dF0ns(i).lt.0)call polymark(vh0ns(i),0,1,10)
   enddo
+  call color(4)
+  if(ltesting.and.ns.eq.1.)call polyline(vha,analFrci/phimax**2,nvh)
   call color(15)
   if(lrefinethreshold)then
      call polymark(vha,Fcvhns(1:nvh,ns+1)/phimax**2,nvh,4)
@@ -933,6 +967,125 @@ subroutine timenofx
   write(*,'(a,i5,a,i5,a,i8,a)')'Found denofx for',npts,' points a total of '&
        ,ncycle,' times: ',npts*ncycle,' densities'
 end subroutine timenofx
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine analcomp(i)
+! Compare the densities and forces between numerical and analytical forms.
+!  cfp1=2.*(1.+abs(delphi)*alog(2.*sqrt(2.*phimax)/sqrt(abs(delphi))))
+!  anddenf=-cfp1*f1prime(vh)*2.*phimax-(1./6)*f3prime(vh)*(2.*phimax)**2
+! The above gloss makes no significant difference.  
+  anddenf=-2.*f1prime(vh)*2.*phimax-(1./6)*f3prime(vh)*(2.*phimax)**2
+  andFrcf=-f1prime(vh)*(2.*phimax)**2-f3prime(vh)/9.*(2.*phimax)**3
+  isigma=nint(sign(1.,delphi))
+!  phi=abs(delphi)/2.
+!  call denhill(nc,dc,vs-vh,vt,vh,phimax,phi,isigma,nofv,denacross,dendiff)
+  denacross=denionhill(0.)
+  isigma=-nint(sign(1.,delphi))
+!  call denhill(nc,dc,vs-vh,vt,vh,phimax,phi,isigma,nofv,denup,dendiff)
+  denup=denionhill(abs(delphi))
+  directddiff(i)=isigma*(denup-denacross)
+!  directddiff(i)=isigma*dendiff            ! Direct ion dendiff intrinsic
+!  phi=-abs(delphi)/2.
+!  call denhill(nc,dc,vs-vh,vt,vh,phimax,phi,isigma,nofv,dendown,dendiff)
+  dendown=denionhill(0)
+  directddift(i)=sign(1.,delphi)*(denacross-dendown)
+  ddenext=sign(1.,delphi)*(denup-dendown)
+  analdendift(i)=anddenf+ddenext           ! Analytic Total ni difference.
+  analdendiff(i)=anddenf           ! Analytic intrinsic ni difference.
+  analFrci(i)=andFrcf!+denave*(-delphi+Te*2*sinh(delphi/(2.*Te)))!Total frc.
+!  write(*,'(7f10.5)')vh,anddenf,delphi,andFrcf,delphi,denacross-dendown&
+!       ,(denup-dendown)/delphi
+!  write(*,'(6f10.5)')vh,anddenf,delphi-ddenext,andFrcf,diffint
+end subroutine analcomp
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine testdendiff
+  ! Do a direct comparison of the anal dendiff and numerical.
+  delphi=0.01   ! adjust by hand
+  do i=1,nvh
+     vh=vhmin+(vhmax-vhmin)*(i-1.)/(nvh-1.)
+     vha(i)=vh
+     analdendiff(i)=-2.*f1prime(vh)*2.*phimax-(1./6)*f3prime(vh)*(2.*phimax)**2
+     isigma=nint(sign(1.,delphi))
+     denplus=denionhill(0.)
+     isigma=-isigma
+     denminus=denionhill(abs(delphi))
+     directddiff(i)=-isigma*(denplus-denminus)
+  enddo
+  call autoplot(vha,analdendiff,nvh)
+  call color(4)
+  call polyline(vha,directddiff,nvh)
+  call pltend
+  call exit
+end subroutine testdendiff
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine plotanalcomp
+   call multiframe(2,1,3)
+   call dcharsize(.02,.02)
+   phimaxin=phimax
+   do i=1,npsi
+      phimax=phimaxin*(float(i)/npsi)**2
+      call scanvh(index)
+      if(i.eq.1.)then
+         call pltinit(vha(1),vha(nvh),0.,0.4)
+         call axis
+         call axis2
+         call legendline(.9,.9,258,'(b)')
+         call legendline(-.12,.65,258,'!Bf!@!di!A;!@!d(!Bv!@)')
+         call legendline(.6,-.1,258,'!Bv!@')
+         call polyline(vha,fofvh,nvh)
+         call polymark(vha(index),fofvh(index),1,10)
+!         call autoplot(x,phiofx/phimax,npts)
+         call pltinit(x(1),x(npts),-.1,1.05)
+         call legendline(.9,.9,258,'(c)')
+         call axis; call axis2
+         call dashset(1)
+         call polyline(x,phiofx/phimax,npts)
+         call fwrite(phimax,iwidth,3,string)
+         call legendline(0.05,.9,0,' !Ay!@='//string(1:iwidth))
+         call dashset(0)
+         call legendline(-.1,.65,258,'!Af!@/!Ay!@')
+         call legendline(.6,-.1,258,'!Bx!@')
+      elseif(i.eq.npsi)then
+         call polyline(x,phiofx/phimax,npts)
+         call fwrite(phimax,iwidth,3,string)
+         call legendline(0.05,.75,0,' !Ay!@='//string(1:iwidth))
+         call dashset(4)
+         call polyline([x(1),x(npts)],[0.,0.],2)
+         call dashset(0)
+         call multiframe(0,0,0)
+         call pltend
+      endif
+! Find dn/dphi      
+      isigma=-nint(sign(1.,delphi0))
+      dphi=1.*delphi0
+      call denhill(nc,dc,vs,vt,vh,phimax,-dphi/2.,isigma,nofv,theden,dendiff)
+      call denhill(nc,dc,vs,vt,vh,phimax, dphi/2.,isigma,nofv,othden,dendiff)
+      dnidphi=dendiff/dphi
+      dnidphi=.3
+!      write(*,*)'dnidphi,Te=',dnidphi,Te
+      psia(i)=phimax
+      delpha(i)=delphi0
+      f3p=f3prime(vh0)
+      sigmaD=sign(1.,f3p)
+      Ts=1/(1/Te-dnidphi)
+! Third version
+!      Ts=1.3*Te   ! Additive dnidphi is better.
+      g=sigmaD*Ts*(2./9.)*f3p*phimax
+      analdp(i)=sigmaD*phimax*(1+g)*(1.-sqrt(1-2.*g/(1+g)))
+!      analdp(i)=sigmaD*phimax*g ! This is practically just as good.
+      write(*,'(a,6f10.6)')'psi,vh0,dphi,anal',phimax,vh0,delphi0&
+           ,analdp(i)
+   enddo
+!   call autoplot(psia,delpha,npsi)
+   call charsize(.02,.02)
+   call lautoplot(psia,abs(delpha),npsi,.true.,.true.)
+   call legendline(.1,.9,258,'(a)')
+   call axlabels('!Ay!@','!ADf!@')
+   call axis2
+   call color(4)
+   call polyline(psia,abs(analdp),npsi)
+   call pltend
+   call exit
+end subroutine plotanalcomp
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end module AsymHill
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1026,7 +1179,7 @@ end subroutine fvhill
 ! nc is the number of Maxwellian components 
 ! dc(nc), vs(nc), vt(nc) is each component's density, vshift, sqrt(T/M)
 ! phimax is hill's peak potential relative to mean distant potential
-! phi is the potential at which to find the distribution.
+! phi is the potential at which to find the distribution/density.
 ! isigma is the side of the hill on which this potential lies.
 ! All velocities are relative to the hill's rest frame.
 ! On exit:
@@ -1111,35 +1264,9 @@ use AsymHill
 call parseAsymargs
 call initvofv
 
-if(ldscale.and..not.ltestnofx)then
-   phimaxin=phimax
-   do i=1,npsi
-      phimax=phimaxin*(float(i)/npsi)**2
-      call scanvh(index)
-! Find dn/dphi      
-      isigma=-nint(sign(1.,delphi0))
-      dphi=0.02*phimax
-      call denhill(nc,dc,vs,vt,vh,phimax,0.,isigma,nofv,theden,dendiff)
-      call denhill(nc,dc,vs,vt,vh,phimax,dphi,isigma,nofv,otherden,dendiff)
-      dnidphi=dendiff/dphi
-      write(*,*)'dnidphi,Te=',dnidphi,Te
-      psia(i)=phimax
-      delpha(i)=delphi0
-      f3p=f3prime(vh0)
-      sigmaD=sign(1.,delphi0)
-      Ts=2.3*Te
-      analdp(i)=sigmaD*phimax*(1.-sqrt(1.-sigmaD*2.*Ts/3.*f3p*phimax))
-      write(*,'(a,6f10.6)')'psi, vh0, Fdiff, dp',phimax,vh0,Forcediff,delphi0&
-           ,analdp(i),f3p
-   enddo
-!   call autoplot(psia,delpha,npsi)
-   call lautoplot(psia,abs(delpha),npsi,.true.,.true.)
-   call axlabels('!Ay!@','!ADf!@')
-   call color(4)
-   call polyline(psia,abs(analdp),npsi)
-   call pltend
-   call exit
-endif
+!call testdendiff
+
+if(ldscale.and..not.ltestnofx)call plotanalcomp
 
 if(ltestnofx)then
    call finddelphi
@@ -1157,7 +1284,6 @@ endif
 
 if(lfvden)then
 call plotfvden
-call pltend
 endif
 
 end program Asym
