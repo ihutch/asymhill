@@ -11,6 +11,8 @@
 
 \title{Asymmetric One-Dimensional Slow Electron Holes}
 \author{I H Hutchinson}
+\date{Plasma Science and Fusion Center,\\ Massachusetts Institute of
+  Technology,\\ Cambridge, Massachusetts, 02139, USA}
 \begin{document}
 \maketitle
 \begin{abstract}
@@ -26,8 +28,8 @@
   equilibrium is unstable unless there is a local minimum in the ion
   velocity distribution, in which the hole velocity then resides. For
   stable equilibria with Maxwellian electrons, the potential drop
-  across the hole is shown to be approximately
-  $\Delta\phi={2\over 9}{T_e\over e}f'''({e\over m_i})^2\psi^2$, where
+  across the hole is shown to be
+  $\Delta\phi\simeq{2\over 9}f'''{T_e\over e}({e\psi\over m_i})^2$, where
   $\psi$ is the hole peak potential, $f'''$ is the third derivative of
   the background ion velocity distribution function at the hole
   velocity, and $T_e$ the electron temperature. Potential asymmetry is
@@ -195,10 +197,10 @@ the structure is called a Double-Layer.  Double-layers have a long
 history of study since their first experimental observation and
 analysis by Langmuir\cite{Langmuir1929}. Although the possibility of
 asymmetric solitons, with local potential minima or maxima has been
-noted in these and other studies\cite{Schamel1986}, almost all of the
-analysis assumes that the double-layer potential is monotonic or
-occasionally has a local minimum (i.e.\ an ion hole, or an
-electron-acoustic soliton\cite{Vasko2017a}).  A (monotonic)
+noted in these and other double layer studies\cite{Schamel1986},
+almost all of the analysis assumes that the double-layer potential is
+monotonic or occasionally has a local minimum (i.e.\ an ion hole, or
+an electron-acoustic soliton\cite{Vasko2017a}).  A (monotonic)
 double-layer has a single potential segment, and the approach of BGK
 described in the previous paragraph describes how, given $\phi(x)$ and
 the entire incoming distribution of the reflected species on one side,
@@ -781,7 +783,7 @@ and the force balance requirement ($F=0$). There is an
 comes from the asymmetry of $f_{i\infty}$, and there is an
 \emph{extrinsic} asymmetry that comes from $\Delta \phi$.  The
 asymmetry (strictly antisymmetric part) of $f_{i\infty}$ can be
-expressed as the odd terms of an expansion in terms of velocity in the
+expressed as the odd terms of its Taylor expansion in velocity in the
 hole frame $f'v+{1\over6}f'''v^3+O(v^5)$, $f'$ and $f'''$ are the
 first and third velocity-derivatives of $f_{i\infty}$ evaluated at
 $v=0$ (i.e.\ at ion-frame velocity $v_h$) taken as constants.
@@ -1097,7 +1099,9 @@ being changed by multidimensional effects.
 \section*{Acknowledgments}
 I am grateful for discussions and collaboration with Ivan Vasko and
 his colleagues about observations of electron holes in space. No
-external funding supported the present work.
+external funding supported the present work\footnote{The code that
+  produced the figures in this paper is available at
+  \url{https://github.com/ihutch/asymhill}}.
 
 \bibliography{JabRef}
 
