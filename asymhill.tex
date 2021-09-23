@@ -1,20 +1,31 @@
-\documentclass[12pt]{article}
-
-\usepackage[margin=1in]{geometry}
-\usepackage{graphicx}
-\usepackage{hyperref}
+\documentclass[pre]{revtex4-2}
+%\documentclass[pre,twocolumn]{revtex4-2}
+%\documentclass[12pt]{article}  % Vanilla Latex.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \usepackage{amssymb}
 \usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{bm}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\ifx\affiliation\undefined %Then we are not using a journal class
+\def\affiliation#1{\date{\normalsize #1}}
+\usepackage[margin=1in]{geometry}
 \usepackage[sort&compress,numbers]{natbib}
-\bibliographystyle{unsrt}
+\bibliographystyle{unsrtnatIH}
+\fi
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \def\energy{{\cal E}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
 
 \title{Asymmetric One-Dimensional Slow Electron Holes}
 \author{I H Hutchinson}
-\date{Plasma Science and Fusion Center,\\ Massachusetts Institute of
+\affiliation{Plasma Science and Fusion Center,\\ Massachusetts Institute of
   Technology,\\ Cambridge, Massachusetts, 02139, USA}
-\begin{document}
-\maketitle
+
+\ifx\altaffiliation\undefined\maketitle\fi % Latex documentclass.
 \begin{abstract}
   Slow solitary positive-potential peaks sustained by trapped electron
   deficit in a plasma with asymmetric ion velocity distributions are
@@ -36,6 +47,7 @@
   small for holes of the amplitudes usually observed,
   $\psi\lesssim 0.5T_e/e$.
 \end{abstract}
+\ifx\altaffiliation\undefined\else\maketitle\fi  % Revtex
 
 \section{Introduction}
 
@@ -50,8 +62,8 @@ by the potential\cite{Schamel1986,Hutchinson2017}, hence the
 name. Normally electron holes are considered to be solitary waves in
 which a single potential peak is embedded in a plasma that is uniform
 far from the peak. When there is negligible reflection of ions by the
-potential, for example because the ions' mean velocity (in the hole
-frame) far exceeds their distribution width, electron holes are
+potential, for example because the ions' mean velocity in the rest
+frame of the hole far exceeds their distribution width, electron holes are
 symmetric about the potential peak. This symmetry is required by the
 fact that the trapped-electron distribution must be symmetric in
 velocity, and the passing-electron and ion densities are functions
@@ -64,19 +76,21 @@ properties (e.g.\cite{Eliasson2006,Krasovsky2003,Dupree1982,Turikov1984,Chen2004
 space plasma observations of sufficient time resolution now often
 observe fast-moving potential peaks interpreted as electron holes (e.g.\cite{Ergun1998,Ergun1999,Malaspina2013,Malaspina2014,Malaspina2018,Malaspina2019,Steinvall2019,Graham2016,Tong2018,Lotekar2020}).
 
-By contrast, when there is reflection of ions, because $f_i(v)$ is
-non-negligible near $v=0$ (which we call a `slow' electron hole
-situation) it can produce a net interaction force exerted by the
-potential hill on the ions, $F_i$, when the ion distribution is
-asymmetric in velocity. Since the potential is sustained in place only
-by the plasma particles, in equilibrium the ion force must be balanced
-by an equal and opposite force exerted by the potential on the
-electrons, $F_e$, making the total zero: $F_i+F_e=0$. The electron
-force $F_e$ can be non-zero in equilibrium only if there is some
-(positional) asymmetry in the potential. In fact, as we shall show,
-for given $f_i$ and $f_e$ in some other fixed frame (e.g.\ the `ion'
-frame in which mean ion velocity is zero), there is generally only one
-discrete mode velocity that gives rise to an equilibrium $F_i+F_e=0$.
+By contrast, when the $f_i(v)$ (in the hole frame) is non-negligible
+near $v=0$ (which we call a `slow' electron hole situation) reflection
+of ions from the hole potential can produce a net interaction force
+exerted by the potential hill on the ions, $F_i$. It is generally
+non-zero when the background ion distribution is asymmetric in
+velocity. Since the potential is sustained in place only by the plasma
+particles, in steady equilibrium the ion force must be balanced by an
+equal and opposite force exerted by the potential on the electrons,
+$F_e$, making the total zero: $F=F_i+F_e=0$. But the electron force $F_e$
+can be non-zero in equilibrium only if there is some (positional)
+asymmetry in the potential. In fact, as we shall show, for given $f_i$
+and $f_e$ in some other fixed frame (e.g.\ the `ion' frame in which
+mean ion velocity is zero), there is generally only one discrete mode
+velocity that gives rise to an equilibrium $F_i+F_e=0$. All other hole
+velocities will be unsteady and experience acceleration.
 
 Moreover, even if $F_e+F_i=0$, for example when there is a velocity
 about which both $f_e$ and $f_i$ are symmetric, the equilibrium it
@@ -109,17 +123,18 @@ across the hole that persists into the quasineutral region.
 \end{figure}
 Fig.\ \ref{fig:electronholeorbits} illustrates schematically the
 potential, and electron and ion distribution function contours in
-their respective phase-spaces. There is a region of closed (trapped) electron
-orbits whose distribution function $f_e(x,v_e)$ is set by the
+their respective phase-spaces. There is a region of closed (trapped)
+electron orbits whose distribution function $f_e(x,v_e)$ is set by the
 formation conditions of the structure. It is generally lower than the
-nearby untrapped (passing) $f_e$, which is set by boundary conditions and the
-constancy of $f$ on orbits, because of the Vlasov equation. The
-trapped electron deficit causes $n_e(x)<n_i(x)$ near $x=0$ and thereby
-sustains the potential $\phi$. The ion distribution is everywhere set
-by its value at the $x$-boundaries (infinity). In this illustration it
-is a Maxwellian shifted by 1.5 velocity units. The outgoing
-distribution is complicated by reflection and has discontinuities at
-the transition between reflected and unreflected orbits.
+nearby untrapped (passing) $f_e$, which is set by boundary conditions
+and the constancy of $f$ on orbits, because of the Vlasov
+equation. The trapped electron deficit causes $n_e(x)<n_i(x)$ near
+$x=0$ and thereby sustains the potential $\phi$. The incoming ion
+distribution is everywhere set by its value at the $x$-boundaries
+(infinity). In this illustration it is a single Maxwellian shifted by
+1.5 velocity units. The outgoing distribution is complicated by
+reflection and has discontinuities at the transition between reflected
+and unreflected orbits.
 
 The problem addressed in the present work is this. Given prescribed
 electron and ion velocity distributions incoming at the boundaries,
@@ -178,13 +193,13 @@ equation governs the reflected part of $f_{e}(\energy)$ and can be
 solved to find the unique required trapped-electron distribution
 consistent with the specified potential profile. For the next segment
 to the right, which has \emph{decreasing} $\phi(x)$, the roles of
-electrons and ions are reversed, the entire $f_e$ is known and the
-passing ion $f_{ip}$. One can thus find the required reflected ion
-distribution from an integral equation. By this sequential process one
-can in principle find the sequence of reflected (and trapped)
-distribution functions that self-consistently satisfy Poisson's
-equation and dependence of $f(v)$ only on energy, i.e.\ the steady
-Vlasov equation.
+electrons and ions are reversed, the entire $f_e$ and the passing ion
+distribution $f_{ip}$ are known. One can thus find the required
+reflected ion distribution from an integral equation. By this
+sequential process one can in principle find the sequence of reflected
+(and trapped) distribution functions that self-consistently satisfy
+Poisson's equation and dependence of $f(v)$ only on energy, i.e.\ the
+steady Vlasov equation.
 
 Concerning a \emph{solitary} potential structure like an electron
 hole, if the asymmetry $\Delta \phi$ becomes so great that it removes
@@ -247,6 +262,48 @@ here are purely one-dimensional.
 
 \section{Problem specification and  approach}
 
+Since several different steps are required to determine the slow hole
+equilibrium, each of which is quite complicated, a summary that is
+likely to be more comprehensible in hindsight is given here as
+orientation. The subsequent subsections will explain in detail
+the steps briefly enumerated.  The algorithm has been
+implemented numerically. Algebraic confirmation is pursued in
+Section \ref{SectionAlgebra}.
+
+\paragraph{From specified $f_{i\infty}(v_\infty)$} --- which is in
+principle arbitrary but is conveniently represented by a sum of
+shifted Maxwellian components of different densities and temperatures
+--- and specified potential peak $\psi$, integrate the ion
+distribution, equation (\ref{ni}), using constancy along orbits, equation
+(\ref{eq:fiinf}), to obtain the ion density everywhere as a function of
+potential and sign-of-$x$: $n_i(\phi,\sigma_x)$.
+
+\paragraph{Determine the distant potential asymmetry
+  $\Delta \phi = \phi_i(+\infty)-\phi_i(-\infty)$} using a search
+followed by Newton iteration of $\Delta\phi$, so as to satisfy distant
+quasi-neutrality, equation (\ref{fedist}). The algorithm of step (a.) is
+used to give each iteration's $n_i(\phi(\pm\infty),\sigma_x)$.
+
+\paragraph{Find the equilibrium hole velocity $v_h$} by searching,
+with repetitive use of step (b.) to evaluate the total force $F$ exerted
+by the potential on particles. This is implemented by a coarse scan of
+$v_h$ (which provides data for explanatory plots such as Fig.\
+\ref{fig:dynamic}) followed by iterative refinement of the precision
+of the equilibrium $v_h$ that makes $F=0$.
+
+\paragraph{Construct the $\phi(x)$} by prescribing the higher
+potential side's ($\sigma_m$) $\phi(x)$ using a convenient potential
+form eq.\ (\ref{phishape}), giving the trapped electron density
+$n_{et}(\phi)$. Solve Poisson's equation on the other side
+($-\sigma_m$) using the then known $n_i(\phi)$, $n_e(\phi)$.
+
+\paragraph{Verify the dynamic stability:} 
+by calculating the force response to rapid hole shifts,
+$\delta F/\delta x$.  If desired, solve the integral equation to find
+the trapped electron distribution function from the prescribed
+$\phi(x)$.
+
+
 \subsection{Specifying the ion distribution}
 We begin by supposing that the incoming ion velocity distribution far
 from the hole is known and the potential is
@@ -283,8 +340,9 @@ $f_{i}(x,v)$.
   \centering
   \includegraphics[width=.6\hsize]{fiplots}
   \caption{Illustration of ion distributions on either side of the
-    potential hill, and their integral, which is the cumulative
-    probability distribution $P(v)$, and equals $n_i(\phi)$ at $v=+\infty$.}
+    potential hill, and their integral $P(v)$, which is the cumulative
+    probability distribution multiplied by $n_i(\phi)$  (equal
+    to $n_i(\phi)$ at $v=+\infty$).}
   \label{fig:fiplots}
 \end{figure}
 Fig. \ref{fig:fiplots} illustrates these features for an incoming ion
@@ -295,7 +353,7 @@ this and all other plots we use units normalized to Debye length
 $\sqrt{\epsilon_0T_0/n_ie^2}$, reference ion thermal energy $T_0$ and
 thermal velocity $\sqrt{T_0/m_i}$, and densities are unity when
 $\phi=\psi=0$. In these units, the ion mass is 1 and the ion charge is
-$e=1$, and potential is in units $T_0/e$. The electron temperature
+$e=1$, and potential is in units $T_0/e$. The (untrapped) electron temperature
 $T_e$ is equal to $T_0$ unless otherwise noted. Recognize that $\phi_\infty$ is
 initially unknown, and different for different sides $\sigma_\infty$.
 
@@ -447,7 +505,7 @@ F_e=-V_e=e\int_{-\Delta\phi/2}^{\Delta\phi/2} n_{e}
 d\phi=n_{e0}T_e[\exp(e\Delta\phi/2T_e)-\exp(-e\Delta\phi/2T_e)].
 \end{equation} It
 is the force of electron reflection from the potential
-difference across the hole, and for the present Maxwellian electrons
+difference across the hole, and for the present Maxwellian electrons,
 is manifestly the electron pressure-difference across the hole.
 
 The ion force also arises from reflection, in its case from either
@@ -487,14 +545,15 @@ examples we are giving. Panel (b) shows as a function of $v_h$ the
 total force on ions, electrons, and their sum, when $\Delta\phi$ is
 such that $n_e(\pm\infty)=n_i(\pm\infty)$, that is, distant neutrality
 is satisfied. Notice that there is substantial cancellation between
-$F_i$ and $F_e$. The total force $F_i+F_e$ given in blue is the
+$F_i$ and $F_e$. The total force $F_i+F_e$ is the
 critical quantity. Equilibria occur where it is zero. This scan shows
 that there are three such $v_h$ roots. However, at two of them, the
 ones located near the distribution maxima, the slope $dF/dv_h$ is
 positive. That sign means that at any adjacent velocity the non-zero
 force acts to accelerate the hole potential velocity $v_h$ \emph{away}
 from the equilibrium value. Thus those equilibria are unstable to slow
-acceleration. Therefore the $F$ zero that is of interest is the middle
+acceleration (in which ion density remains its steady function of
+potential). Therefore the $F$ zero that is of interest is the middle
 one where $dF/dv_h<0$, and is selected by the scan for further
 refinement of the $v_h$ value. The vertical line and the cross on the
 $f_{i\infty}$ plot indicate that equilibrium value.
@@ -516,12 +575,15 @@ the hole-frame ion distribution (by $-v_h$) has almost (but not quite)
 symmetrized the densities and potentials:
 $n_i(+\infty)\simeq n_i(-\infty)$,
 $\phi(+\infty)\simeq \phi(-\infty)$. The remaining asymmetry of the
-distant ion density is cancelled by a very small potential difference
+distant ion density (which is tiny, $<5\times10^{-4}$ of the nearly uniform
+background) is cancelled by a very small potential difference
 changing the electron density. It should be emphasized that this near
 spatial symmetry only occurs at or near equilibrium. At $v_h$ values
 in Fig.\ \ref{fig:forceplot} where the forces are large, there are
 much larger asymmetries in the three curves than Fig.\ \ref{fig:convplot}
-shows; compare Fig.\ \ref{fig:explot}, where $v_h=0$, for example.
+shows; compare for example Fig.\ \ref{fig:explot} ($v_h=0$) where
+the ion density asymmetry is $\sim 2\times10^{-2}$ and $\Delta\phi\sim
+0.035\simeq 0.4\psi$.
 
 
 
@@ -530,8 +592,8 @@ shows; compare Fig.\ \ref{fig:explot}, where $v_h=0$, for example.
 The shape $\phi(x)$ is so far undetermined except for the values of
 its extrema. We are therefore in the usual situation for BGK modes of
 having great liberty in the potential shape, depending on the velocity
-distribution of trapped electrons. (The $\phi(x)$ plots given so far
-should be considered illustrative of plausible possibilities.) The
+distribution of trapped electrons. The $\phi(x)$ plots given so far
+should be considered illustrative of plausible possibilities. The
 difference in potential $\Delta \phi$ is of course, induced by
 ion-density differences. So ions must be accounted for in relating the
 trapped electron distribution to $\phi(x)$. The simpler choice is to
@@ -543,8 +605,8 @@ some constraints on the trapped distribution such as non-negativity
 and finite slope. But these should be no more difficult to satisfy
 than they are for symmetric holes. Moreover, it is not actually
 necessary to solve to find $f_{et}(v)$ in order to complete the hole
-structure determination, because it is only the trapped
-density $n_{et}(\phi)$ that is required.
+structure determination, because it is only the trapped density
+$n_{et}(\phi)$ that is required.
 
 We are, however, not now free to choose separately the $\phi(x)$
 profiles on \emph{both sides} of the hole ($\sigma_x=\pm1$), because
@@ -606,7 +668,8 @@ Fig.\ \ref{fig:phiofmodx}(b).
 In addition to the steady-state force imbalance already discussed, an
 additional mechanism that could give rise to hole velocity instability
 involves force imbalance arising from hole acceleration itself. An
-electron hole accelerating on the electron response timescale does not
+electron hole accelerating on the electron response timescale (of
+order a few times $1/\omega_{pe}$) does not
 permit adjustment of the ion density fast enough to be effectively
 steady. As an approximation based on the separation of timescales, one
 can approach this issue by supposing there is negligible ion density
@@ -627,7 +690,7 @@ $-dn_i/d\phi$ of the dominant contributions to the integral. Stability
 depends on the sign of $\delta F/\delta x$, and therefore of the
 integral. If it is such as to enhance $\delta v_h$ and hence
 $\delta x$, which arises if $\delta F/\delta x$ is positive,
-exponential growth will occur. In so far as the system is correctly
+exponential growth of hole shift $\delta x$ will occur. In so far as the system is correctly
 described dynamically by this shift motion with static ions, it will
 be stable if both $\delta F/\delta x$ and the equilibrium quantity
 $dF/dv_h$ are negative. Given the equilibrium solution, it is easy
@@ -654,67 +717,37 @@ calculations is shown in Fig.\ \ref{fig:dynamic}.
   \includegraphics[width=.6\hsize]{dynamic}
   \caption{Stability parameters as a function of $v_h$, for a range of
     distributions obtained by scaling the Maxwellian components' shift
-    velocity.}
+    velocity ($v_{shift}\propto$ 0, .33, .66, 1., 1.33, 1.66, 2.).
+    %:blue, green, cyan, red, purple, brown, gray
+    }
   \label{fig:dynamic}
 \end{figure}
 It includes (a) the velocity distribution, $f_{i\infty}(v_{\infty})$
 (b) the steady force $F(v_h)$, and (c) the dynamic-shift force
 coefficient $\delta F/\delta x$ for a set of 7 different velocity
 shift scalings, colored by shift factor. The middle scaling factor is
-1 (red) and corresponds to the distribution of the previous 5
+1 and corresponds to the distribution of the previous 5
 figures. It confirms that $\delta F/\delta x$ is negative for the
 equilibrium $v_h$ shown by the cross, as previously found. Therefore
 by the approximate dynamic analysis this equilibrium is stable. For
-zero shift factor (blue) the ion distribution is a single
-Maxwellian. It's equilibrium $F(v_h)=0$ is unstable, and in such cases
-no cross is plotted. For a large shift factor of 2 (grey) the
+zero shift factor the ion distribution is a single
+Maxwellian. Its equilibrium $F(v_h)=0$ is unstable, and in such cases
+no cross is plotted. For a large shift factor of 2 the
 distribution consists of two components hardly overlapping. All
-distributions plotted from scale-factor of $\sim1$ upward are
+distributions plotted from shift-factor of $\sim1$ upward are
 stable. All below are unstable. A refined intermediate value of the
 scaling factor at the threshold for stability is found and plotted as
 black points with the corresponding equilibrium $v_h$ indicated by a
-short vertical line.  It is noticeable that the static $dF/dv<0$ and
-dynamic $\delta F/\delta x$ stability thresholds are the same for this
-coarse scan. In other words (approximately): if and only if a
-distribution allows a statically stable equilibrium, it is dynamically
-stable. Moreover, it is required to have a local minimum in
-$f_{i\infty}$ in order for a stable equilibrium to exist. As has been
-shown previously\cite{Hutchinson2021c}, the larger the $\psi$ the
+short vertical line.  It is noticeable that the required $v_{shift}$ to achieve
+static $dF/dv<0$ and dynamic $\delta F/\delta x$ stability are the
+same for this coarse scan. In other words (approximately): if and only
+if a distribution allows a statically stable equilibrium, it is
+dynamically stable. Moreover, it is required to have a local minimum
+in $f_{i\infty}$ in order for a stable equilibrium to exist. As has
+been shown previously\cite{Hutchinson2021c}, the larger the $\psi$ the
 deeper the minimum has to be. But for this moderate case,
 $\psi=0.09 T_0$ (and smaller $\psi$), the depth required is small.
 
-
-\subsection{Summary of Algorithm and Numerical Implementation}
-
-The algorithm that has been implemented numerically is this.
-
-\paragraph{1. From specified $f_{i\infty}(v_\infty)$} --- which is in
-principle arbitrary but is conveniently represented by a sum of
-shifted Maxwellian components of different densities and temperatures
---- and specified potential peak $\psi$, integrate equation
-(\ref{ni}), using equation (\ref{eq:fiinf}) to obtain
-$n_i(\phi,\sigma_x)$.
-
-\paragraph{2. Determine the potential asymmetry $\Delta \phi$} using a
-search followed by Newton iteration of $\Delta\phi$, so as to satisfy
-equation (\ref{fedist}). The algorithm of step 1 is used to give each
-iteration's $n_i(\phi(\pm\infty),\sigma_x)$.
-
-\paragraph{3. Find the equilibrium hole velocity $v_h$} by searching,
-with repetitive use of step 2 to evaluate the total force $F$ exerted
-by the potential on particles. This is implemented by a coarse scan of
-$v_h$ (which provides data for explanatory plots such as Fig.\
-\ref{fig:dynamic}) followed by iterative refinement of the precision
-of the equilibrium $v_h$ making $F=0$.
-
-\paragraph{4. Construct the $\phi(x)$} by prescribing the higher
-potential side's ($\sigma_m$) $\phi(x)$ using potential form eq.\
-(\ref{phishape}), giving the trapped electron density
-$n_{et}(\phi)$. Solve Poisson's equation on the other side
-($-\sigma_m$) using the then known $n_i(\phi)$, $n_e(\phi)$. Verify
-whether $\delta F/\delta x$ satisfies dynamic stability.  If desired,
-solve the integral equation to find the trapped electron distribution
-function from the prescribed $\phi(x)$.
 
 \section{Asymmetric Holes at a range of parameters}
 
@@ -726,8 +759,9 @@ equal to the temperature of component one $T_0=T_1$, and the sum of
 the densities (the total background ion density) is unity
 $n_1+n_2=1$. Thus $n_2$, $T_2$, and $v_s$ are the three parameters
 determining the distribution shape. Fig.\ \ref{fig:multiden} surveys
-the shapes $f_{i\infty}(v)$ and resulting ion density profiles
-$n_i(x)$.
+the shapes $f_{i\infty}(v)$, and the resulting ion density profiles
+$n_i(x)$ for those hole amplitudes ($\psi$) which possess stable slow
+hole equilibria.
 \begin{figure}[htp]
   \centering
   \includegraphics[width=.9\hsize]{multiden}
@@ -741,24 +775,26 @@ $n_i(x)$.
     plotted for 3 different potential peak heights
     $\psi$=$(.4,.04,.004)$ indicated by different colors, but only if
     a stable equilibrium hole velocity ($v_h$) exists. If it does, a
-    cross is plotted of that color on the left-hand subframe at that
+    cross is plotted on the left-hand subframe at that
     velocity and distribution height.}
   \label{fig:multiden}
 \end{figure}
 
+
 The overall scaling of the ion density perturbation is seen to be
 $n_i-1\sim \psi$. This is intuitive; the amplitudes of the potential
-perturbation and the density perturbation are proportional.  We
-observe that there is very little difference in the scaled density
-perturbation between the lower amplitude cases $\psi=0.04,0.004$, even
-quantitatively. This is because for these cases the deficit in
-$f_e(v)$, and of $n_i$, supporting the hole, is fractionally small and
-can be linearized. By contrast, for $\psi=0.4$, the hole is deep and the
-ion density response is no longer linear. Moreover, for the bottom
-row, none of the distributions permits a stable hole at $\psi=0.4$
-even though it does at the lower amplitudes. That is because deeper
-holes would require a deeper local minimum in $f_{i\infty}$ for
-stability than is provided by these cases.
+perturbation and the density perturbation are proportional to one
+another, when small.  We observe that there is very little difference
+in the scaled density perturbation between the lower amplitude cases
+$\psi=0.04,0.004$, even quantitatively. This is because for these
+cases the deficit in $f_e(v)$, and of $n_i$, supporting the hole, is
+fractionally small and can be linearized. By contrast, for $\psi=0.4$,
+the hole is deep and the ion density response is no longer
+linear. Moreover, for the bottom row of Fig. \ref{fig:multiden}, none
+of the distributions permits a stable hole at $\psi=0.4$ even though
+it does at the lower amplitudes. That is because deeper holes would
+require a deeper local minimum in $f_{i\infty}$ for stability than is
+provided by these cases.
 
 The top right case ($T_{2}=1$, $n_2=0.5$) is completely symmetric, and
 the equilibrium is at $v_h=0$, the symmetry axis. Also there is no ion
@@ -773,6 +809,7 @@ asymmetry in $n_i(\infty)$ at equilibrium remains less than
 $\sim 0.2\psi$, and in fact scales like $\psi^2$.
 
 \section{Algebraic Calculation of Asymmetry}
+\label{SectionAlgebra}
 
 \subsection{Explanation of approach}
 The scaling of potential asymmetry can be understood qualitatively as
@@ -842,11 +879,12 @@ important in eq.\ \ref{eq:Delphieq}, and
 \simeq
   \left(b-{ad\over c}\right)f'''\psi^2.
 \end{equation}
-Thus both $\Delta\phi$ and $\Delta n_i$ scale $\sim \psi^2$, and also
-$\sim f'''$, which is the lowest order contribution to asymmetry in
-$f_{i\infty}$ about the local minimum where $f'=0$. Actually the
-solution is not exactly at $f'=0$, but it is at a value that makes the
-two equations consistent, which is
+Thus both $\Delta\phi$ and $\Delta n_i$ scale proportional to the two
+independent parameters $\psi^2$, and $f'''$. The latter is the
+lowest order contribution to asymmetry in $f_{i\infty}$ about the
+local minimum where $f'=0$. Actually the solution is not exactly at
+$f'=0$, but it is at a value that makes the two equations consistent,
+which is
 \begin{equation}
   \label{eq:fprime}
   f'=(\Delta\phi - bf'''\psi^2)/a\psi \simeq
@@ -908,7 +946,7 @@ lowest order we find a result independent of $\Delta\phi$.
   \begin{split}
   \Delta n_f&=-2v_\psi^2f'-{1\over 6} v_\psi^4f'''
   +O(v_\psi^2v_{|\Delta\phi/2|}^2)\\
-  &=-4\psi f' -{2\over 3}\psi^2 f''' +O(\psi\phi)
+  &=-4\psi f' -{2\over 3}\psi^2 f''' +O(\psi|\Delta\phi|).
   \end{split}
 \end{equation}
 %The corresponding coefficients are $a=-4$ and $b=-{2\over3}$ (because
@@ -1030,7 +1068,7 @@ Substituting for them we find the potential asymmetry
 \begin{equation}
   \label{eq:subst}
   \Delta\phi=\sigma_\Delta\psi(1 -\sqrt{1 -\sigma_\Delta (4T_s/9)f'''\psi})
-  \simeq {T_s2\over9}f''' \psi^2
+  \simeq {2T_s\over9}f''' \psi^2
 \end{equation}
 and $f'\simeq -{2\over 9}f'''\psi$. The density asymmetry is $\Delta
 n_i=\Delta n_e\simeq \Delta\phi/T_e = T_s/T_e {2\over 9}f'''\psi^2$.
@@ -1046,13 +1084,13 @@ Fig. \ref{fig:scaled}(a) .
   \centering
   \includegraphics[width=0.42\hsize]{scaled}
   \includegraphics[width=0.5\hsize]{phiscaled}
-  \caption{(a) Comparison of numerical (black) and algebraic (red)
-    estimates of potential asymmetry $\Delta\phi$, showing its scaling
-    proportional to the square of the electron hole peak potential
-    $\psi$. In (b) is shown the ion distribution comprising Maxwellians $T_1=1$,
-    $n_1=0.7$, $v_1=1.197$ $T_2=0.2$, $n_2=0.3$, $v_2=-1.197$, and
-    $T_e=1$, in scaled units. The potential profiles in (c) are from the ends
-    of the scaling range.}
+  \caption{(a) Comparison of numerical (solid black) and algebraic
+    (dashed red) estimates of potential asymmetry $\Delta\phi$,
+    showing its scaling proportional to the square of the electron
+    hole peak potential $\psi$. In (b) is shown the ion distribution
+    comprising Maxwellians $T_1=1$, $n_1=0.7$, $v_1=1.197$ $T_2=0.2$,
+    $n_2=0.3$, $v_2=-1.197$, and $T_e=1$, in scaled units. The
+    potential profiles in (c) are from the ends of the scaling range.}
   \label{fig:scaled}
 \end{figure}
 The good agreement between the two except in the region where $\psi$
@@ -1063,7 +1101,8 @@ scaling range (where the agreement is compromised by $\psi$ no longer
 being small) the asymmetry in the potential at equilibrium remains
 small. This case, corresponds to the $n_2=0.3$, $T_2=0.2$ case of
 Fig.\ \ref{fig:multiden}, correcting any false impression given there
-by the density profiles that the potential asymmetry is strong. It never is.
+by the density profiles that the potential asymmetry is
+strong. Because of force-balance requirements, it never is.
 
 \section{Discussion}
 
@@ -1071,17 +1110,24 @@ This numerical and algebraic analysis of asymmetric electron holes is,
 to my knowledge, the first that treats plausibly realistic external
 ion distributions taking into account the criteria of equilibrium. It
 shows that for truly solitary equilibrium positive potential
-structures, sustained by the plasma velocity distributions not imposed by local
-constraints, potential asymmetry is only minor, and for small
-amplitude electron holes is negligible.  This finding moderates past
-speculations about asymmetric electron holes in the Double Layer
-literature. It also justifies and confirms the recent
-theory\cite{Hutchinson2021c} of slow electron holes that ignores
-potential asymmetry. The present treatment remains purely an
-equilibrium theory, but the force on the hole out of equilibrium has
-been calculated, and its sign determines whether or not the equilibrium
-is stable. For a stable equilibrium to exist, the ion distribution
-must have a local minimum, and the hole velocity must lie within it.
+structures, sustained by the plasma velocity distributions and not
+imposed by local constraints, potential asymmetry is only minor, and
+for small amplitude electron holes is negligible.  This finding
+moderates past speculations about asymmetric electron holes in the
+Double Layer literature. It shows that in the absence (assumed here)
+of strong external electron velocity distribution asymmetry, solitary
+electron holes are nothing like asymmetric enough to be considered
+double layers. It also justifies the approximation of ignoring
+potential asymmetry used in the recent theory\cite{Hutchinson2021c} of
+slow electron holes, and confirms its results. The present treatment
+remains purely an equilibrium theory, but the force on the hole out of
+equilibrium has been calculated, and its required sign to avoid
+exponential instability determined. For a stable equilibrium to exist,
+the ion distribution must necessarily have a local minimum, and the
+hole velocity must lie within it. This necessary condition does not,
+however, establish stability against oscillatory instability of all
+frequencies. A full frequency range analysis, which is beyond the
+present scope, would be required to do so.
 
 It is possible for an electron hole to be \emph{formed} at a velocity
 that does not satisfy the equilibrium force constraint, or in an ion

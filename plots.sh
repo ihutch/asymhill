@@ -40,3 +40,5 @@ make AsymHill
 mv plot0001.ps electronholeorbits.ps
 epstopdf  electronholeorbits.ps
 
+#Modified plots for color ambiguity etc:
+#   forceplot ftrapped multiden scaled dynamic

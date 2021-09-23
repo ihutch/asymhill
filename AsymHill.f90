@@ -625,7 +625,7 @@ do k=1,nT2
          call legendline(.05,.8,258,'0.4')
          if(j.eq.nn2)call legendline(.8,-.1,258,string)
          if(i.eq.1)call polyline(vha,fofvh,nvh)
-         call color(i)
+         call color(max(1,2*(i-1))) !call color(2*i-1)
          if(dFdx0.lt.0)call polymark(vh0,fvh0,1,10)
          call color(15)
          call fwrite(den2,iwidth,1,argument)
@@ -660,12 +660,12 @@ do k=1,nT2
                call jdrwstr(wx2nx(x(npts)),wy2ny(yl),string(1:iwidth),-1.4)
             endif
          enddo
-         call color(i)
+         call color(max(1,2*(i-1)));call dashset(2*(i-1))
          if(dFdx0.lt.0)call polyline(x,(denofx-1)/phimax,npts)
          call fwrite(phimax,iwidth,3,string)
          if(j.eq.1.and.k.eq.i)call legendline(-.2,1.1,0,' !Ay!@='&
               &//string(1:iwidth))
-         call color(15)
+         call color(15);call dashset(0)
          call jdrwstr(wx2nx(x(npts)),wy2ny(.85*denmax)&
               &,'[!Bn!di!@!d(!Bx!@)-1]/!Ay!@!@',-1.2)
          call legendline(.4,.08,258,'!Bx!@')
@@ -838,23 +838,25 @@ subroutine forcedivplot
   call legendline(.9,.9,258,'(a)')
   if(dFdx0.lt.0)call polymark(vh0,fvh0,1,10)
    ! Electron force
-! denave is not really correct here. It is just the last value. Wrong.
-!  call autoplot(vha,denave*Te*2.*sinh(dphivh/(2.*Te)),nvh)
-  call autoplot(vha,Te*2.*sinh(dphivh/(2.*Te)),nvh)
+!  call autoplot(vha,Te*2.*sinh(dphivh/(2.*Te)),nvh)
+  call autoinit(vha,Te*2.*sinh(dphivh/(2.*Te)),nvh)
+  call axis
+  call axis2
   call axlabels('','Forces(v!dh!d)')
   call legendline(.6,-.1,258,'v!dh!d')
-  call axis2
-  call legendline(.05,.8,0,'F!de!d')
   call legendline(.9,.9,258,'(b)')
   call winset(.true.)
   call polyline([vha(1),vha(nvh)],[0.,0.],2)
   if(index.ne.0)call polyline([vh0,vh0],[-10.,10.],2)
-  call color(1)
   call polyline(vha,Forcevh,nvh)      ! Total force
   call legendline(.05,.7,0,'F!di!d+F!de!d')
-  call color(2)
+  call color(1);call dashset(1)
+  call polyline(vha,Te*2.*sinh(dphivh/(2.*Te)),nvh)
+  call legendline(.05,.8,0,'F!de!d')
+  call color(2);call dashset(2)
   call polyline(vha,-denave*dphivh/Te+Forcevh,nvh)   ! Ion force
   call legendline(.05,.9,0,'F!di!d')
+  call dashset(0)
   if(ltesting)then
      call winset(.false.)
      call color(4)
@@ -928,7 +930,7 @@ subroutine forceplotns
   call legendline(.9,.9,258,'(c)')
   call axis
   call axis2
-  call axlabels('v!dh!d  or  v!d!A;!@!d','!Ad!@F/!Ad!@x(v!dh!d)/!Ay!@!u2!u')  
+  call axlabels('v!dh!d  or  v!d!A;!@!d','[!Ad!@F/!Ad!@x(v!dh!d)]/!Ay!@!u2!u')  
   call polyline([vha(1),vha(nvh)],[0.,0.],2)
   do i=1,ns
      call color(i)
@@ -1082,7 +1084,9 @@ subroutine plotanalcomp
    call axlabels('!Ay!@','!ADf!@')
    call axis2
    call color(4)
+   call dashset(1)
    call polyline(psia,abs(analdp),npsi)
+   call dashset(0)
    call pltend
    call exit
 end subroutine plotanalcomp
