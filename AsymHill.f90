@@ -243,12 +243,12 @@ subroutine scanvh(index)
   vh1=0
   vh2=0
   nref=1
-  do j=1,nref           ! Iterate for refinement of vh0
+  do j=1,nref   ! Maybe iterate for additional refinement of vh0. Not usually
      Force=0.
      Fmax=0.
      vh=vhn
      indexref=0
-     do i=1,nvh          ! Scan over the current range
+     do i=1,nvh          ! Scan over the current vh range
         vhprior=vh
         fvh0prior=fvh0
         delphiprior=delphi
@@ -256,7 +256,7 @@ subroutine scanvh(index)
         vh=vhn+(i-1.)*(vhx-vhn)/(nvh-1.)
         lcd=.false.
         call finddelphi
-           call analcomp(i)
+        call analcomp(i)
         if(lfindforce)then
            call findforce
            Force=Forcediff
@@ -313,7 +313,7 @@ subroutine scanvh(index)
   if(indexref.gt.1.and.nref.eq.1)then  ! Refine the equilibrium vh0.
      vhn=vh1
      vhx=vh2
-     do i=1,23
+     do i=1,20
 !        write(*,*)'vhn,vhx,Frc',vhn,vhx,Forcediff
         call bisectvh(vhn,vhx)
      enddo
@@ -410,11 +410,12 @@ subroutine scanspacing
 2    continue
      write(*,*)'Refining vshift threshold'
      vh0=vh0ns(i)
-     vs1fac=0.
+!     vs1fac=0.  ! This seems strange. Why do it?
      dvh=(vhmax-vhmin)/5.
      vhmin=vh0-dvh
      vhmax=vh0+dvh
-     do i=1,ns
+     do i=1,ns*2
+!        write(*,*)vs1fac,vs2fac
         call bisectspacing(vs1fac,vs2fac)
      enddo
      vh0r=vh0
@@ -1270,8 +1271,10 @@ call initvofv
 
 !call testdendiff
 
+! delphi scale analysis rarely used:
 if(ldscale.and..not.ltestnofx)call plotanalcomp
 
+! Plots of non-equilibrium case -f
 if(ltestnofx)then
    call finddelphi
    call plotfvhill
@@ -1281,12 +1284,13 @@ if(ltestnofx)then
    call plotdenofx
 endif
 
+! The workhorse scanning of ns vshifts (-s)
 if(ns.gt.0)then
 call scanspacing
 call forceplotns
 endif
 
-if(lfvden)then
+if(lfvden)then  ! Multi-T,n scan.
 call plotfvden
 endif
 
