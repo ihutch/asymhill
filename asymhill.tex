@@ -279,7 +279,7 @@ distribution, equation (\ref{ni}), using constancy along orbits, equation
 potential and sign-of-$x$: $n_i(\phi,\sigma_x)$.
 
 \paragraph{Determine the distant potential asymmetry
-  $\Delta \phi = \phi_i(+\infty)-\phi_i(-\infty)$} using a search
+  $\Delta \phi = \phi(+\infty)-\phi(-\infty)$} using a search
 followed by Newton iteration of $\Delta\phi$, so as to satisfy distant
 quasi-neutrality, equation (\ref{fedist}). The algorithm of step (a.) is
 used to give each iteration's $n_i(\phi(\pm\infty),\sigma_x)$.
@@ -365,7 +365,7 @@ make the passing ion distribution independent of
 $\Delta\phi=\phi(+\infty)-\phi(-\infty)$. To do
 so requires us to prescribe $f_i(\infty)$ at some negative values of
 energy, since for non-zero $\Delta\phi$, when
-$\bar\phi_{i\infty}=(\phi(+\infty)+\phi(-\infty))/2$ is taken to be
+$\bar\phi_{\infty}=(\phi(+\infty)+\phi(-\infty))/2$ is taken to be
 the zero of potential, the lower side's potential becomes negative and
 we need the incoming ion distribution there down to zero velocity. We
 therefore regard a function $f_{i\infty}(v)$ to be prescribed, and take
@@ -416,7 +416,7 @@ convenient to choose the electron parameters so that $n_e(\phi)$ is an
 easily invertible function. A natural choice is to assume it has
 Boltzmann dependence $n_e\propto \exp(e\phi/T_e)$, so
 \begin{equation}\label{fedist}
-\Delta \phi=\phi_{i}(+\infty)-\phi_i(-\infty)=
+\Delta \phi=\phi(+\infty)-\phi(-\infty)=
 (T_e/e)\ln(n_i(+\infty)/n_i(-\infty)).  
 \end{equation}
 But for numerical solution one could make other choices. Indeed, one
@@ -433,7 +433,7 @@ general have to be found by iteration. In the present work it is
 assumed that $n_e=n_{e0}\exp(e\phi/T_e)$. That is a good approximation
 for Maxwellian electrons and weak current density. We shall also take
 $\psi$ to be fixed relative to the mean
-$\bar\phi_{i\infty}=[\phi(+\infty)+\phi(-\infty)]/2$, which is taken
+$\bar\phi=[\phi(+\infty)+\phi(-\infty)]/2$, which is taken
 to be the zero of potential. The difference $\Delta\phi$ evolves
 during solving iterations. Newton's method applied to the residual
 $(T_e/e)\ln(n_i(+\infty)/n_i(-\infty))-\Delta\phi$ is observed to
