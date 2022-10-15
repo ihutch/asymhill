@@ -1,0 +1,327 @@
+%\documentclass[pre]{revtex4-2}
+%\documentclass[pre,twocolumn]{revtex4-2}
+\documentclass[12pt]{article}  % Vanilla Latex.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{bm}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\ifx\affiliation\undefined %Then we are not using a journal class
+\def\affiliation#1{\date{\normalsize #1}}
+\usepackage[margin=1in]{geometry}
+\usepackage[sort&compress,numbers]{natbib}
+\bibliographystyle{unsrtnat}
+\fi
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\def\energy{{\cal E}}
+\def\etothe#1{{\rm e}^{#1}}
+\def\sech{{\,\rm sech}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+\begin{document}
+
+\title{Ion Holes}
+\author{I H Hutchinson}
+\affiliation{Plasma Science and Fusion Center,\\ Massachusetts Institute of
+  Technology,\\ Cambridge, Massachusetts, 02139, USA}
+
+\ifx\altaffiliation\undefined\maketitle\fi % Latex documentclass.
+\begin{abstract}
+\end{abstract}
+\ifx\altaffiliation\undefined\else\maketitle\fi  % Revtex
+
+\section{Symmetric Maxwellian Background Equilibria}
+
+Electron holes can, and often do, have speeds much higher than ion
+thermal speed, allowing them to be considered unaffected by ion
+interactions. When this is not the case they are considered ``slow''.
+By contrast, ion holes exist only when the spread of the ion distribution
+function $f_i(v)$ in the hole rest frame makes $f_i(0)\not=0$. The ion
+velocity spread is much smaller for physical mass ratios than the
+electron velocity spread; so ions are thus practically always slower than
+electrons and ion holes are always ``slow'' in the sense that they reflect
+some of the repelled species: electrons. The simplest way then to avoid net
+reflection force on the hole is to suppose that the repelled species
+velocity distribution is symmetric about the hole velocity, and we
+begin by considering $f_e(v)$ to be an unshifted Maxwellian in the
+frame of the hole. The electron density is then
+$n_e=\etothe{\phi/\theta}$, where $\theta=T_e/T_i$.
+
+Suppose the (attracted) ion velocity distribution consists of a
+reference distribution that is Maxwellian for passing particles and is
+flat (independent of $v$) for trapped particles, matching the
+untrapped Maxwellian at their join where total energy in the hole
+frame, $\energy$, is zero. This ``flat-trapped'' distribution $f_f(v)$
+governs the attracted species when there is no ``hole'' in the
+distribution. A self-sustaining hole generally depends upon there
+being a trapped deficit relative to the flat-trapped
+distribution. That is represented by an additional function
+$\tilde f_i(v)$ which is negative for trapped particles, $\energy<0$,
+(and zero for passing $\energy>0$). Then supposing the ion Maxwellian
+distribution to have velocity shift $v_s$ in the hole frame,
+\begin{equation}
+  \label{eq:flattrap}
+  f_f(v)={1\over \sqrt{2\pi}}\etothe{-(v-v_s)^2/2}
+  ={1\over \sqrt{2\pi}}\exp\{-(\sqrt{{\rm max}(2[\energy+|\phi|],0)}-v_s)^2/2\}
+\end{equation}
+where $\energy=v^2/2+\phi(z)$, and $f_i(v)=f_f(v)+\tilde f_i(v)$ with all
+velocities are expressed in the hole rest frame. It is easy to show
+that when $v_s=0$, the resulting flat-trapped density is
+\begin{equation}
+  \label{eq:nft}
+  n_f=  {2\over \sqrt{\pi}}|\phi|^{1/2}+
+  \etothe{|\phi|}{\rm erfc}(|\phi|^{1/2}).
+\end{equation}
+Poisson's equation for the ion hole is then
+\begin{equation}
+  \label{eq:Poisson}
+  {d^2\phi\over dz^2} = n_e-n_f-\tilde n_i
+  = \etothe{\phi/\theta}- [{2\over \sqrt{\pi}}|\phi|^{1/2}+
+  \etothe{|\phi|}{\rm erfc}(|\phi|^{1/2})] -\tilde n_i,
+\end{equation}
+where $\tilde n_i=\int \tilde f_i dv$ is the hole trapped ion density
+deficit.  Regard this equation as giving an expression for
+$\tilde n_i$ that consists of three terms: the electron density
+$n_e=\etothe{\phi/\theta}$, minus the flat-trapped ion density
+$n_f= [{2\over \sqrt{\pi}}|\phi|^{1/2}+ \etothe{|\phi|}{\rm
+  erfc}(|\phi|^{1/2})]$, plus the field divergence, which we denote
+$n_\phi\equiv-{d^2\phi\over dz^2}$. That is, $\tilde n_i=
+n_\phi+n_e-n_f$.
+
+
+If the hole potential $\phi(z)$ is prescribed, then the divergence
+term is known, and $\tilde n_i(z)$ is given by Poisson's equation. The
+ion distribution deficit $\tilde f_i$, which is a function only of energy,
+must be such as to give rise to this $\tilde n_i$. The (Abel) integral
+equation governing $\tilde f_i$ may be inverted to obtain
+\begin{equation}
+  \label{eq:abel}
+  \tilde f_i(v_\psi) = {1\over \sqrt{2}\pi}\int_0^{|\psi|-v_\psi^2/2}
+    {d\tilde n_i\over d|\phi|}{d|\phi|\over
+      \sqrt{|\psi|-v_\psi^2/2-|\phi|} }
+    ={1\over \sqrt{2}\pi}\int_0^{-\energy}
+    {d\tilde n_i\over d|\phi|}{d|\phi|\over
+      \sqrt{-\energy-|\phi|} },
+\end{equation}
+where $v_\psi$ denotes the ion velocity at the center of the hole
+where $\phi=\psi$, that is $v_\psi=\sqrt{2(\energy+|\psi|)}$. Since
+eq.\ (\ref{eq:abel}) is linear in the density deficit, we can treat the
+three density terms separately and then add them up. The electron
+derivative is ${dn_e\over d|\phi|}= -\etothe{-|\phi|/\theta}/\theta$,
+and the flat-trapped contribution is
+${dn_f\over d|\phi|}= \etothe{|\phi|}{\rm erfc}(|\phi|^{1/2})$.
+
+As an illustrative choice let us suppose that the hole potential is of
+the form
+\begin{equation}
+  \label{eq:potl}
+  \phi(z) = \psi \sech^\ell\left({z\over\ell\lambda}\right).
+\end{equation}
+The parameter $\ell$ is usually taken to be 4, but we retain
+slightly more generality, because we can still derive closed analytic
+expressions. That mathematical convenience arises from the identity
+${d^2\over dx^2} \sech^\ell x = \ell\sech^\ell x
+-\ell(\ell+1)\sech^{\ell+2}x$, from which we find (for negative
+$\phi$, $\psi$)
+\begin{equation}
+  \label{eq:diverg}
+  -n_\phi={d^2\phi\over dz^2}=-{1\over \lambda^2}\left[
+    |\phi| -{\ell+1\over \ell}{|\phi|^{(\ell+2)/\ell}\over |\psi|^{2/\ell}}
+  \right],
+\end{equation}
+and so
+\begin{equation}
+  \label{eq:derivdiv}
+  {d n_\phi\over d|\phi|}={1\over \lambda^2}\left[
+    1 -{\ell+1\over \ell}{\ell+2\over \ell}\left|\phi\over \psi\right|^{2/\ell}
+  \right].
+\end{equation}
+
+To avoid divergent slope of $\tilde f_i$ at $\energy=0$, it is necessary
+that $\left.d\tilde n_i\over d\phi\right|_{\phi=0}=0$. That condition 
+immediately becomes
+\begin{equation}
+  \label{eq:shielding}
+ 0= \left[{d n_\phi\over d|\phi|} +  {dn_e\over d|\phi|}- {dn_f\over d|\phi|}\right]_{\phi=0}=
+  {1\over \lambda^2}- {1\over \theta} - 1.
+\end{equation}
+Thus the parameter $\lambda$ must be given by
+$ {1\over \lambda^2}= {1\over \theta}+1$, and it becomes precisely the
+screening length combining electron and ion Debye lengths in ion Debye
+length units, because $\lambda_{De}^2=\lambda_{Di}^2\theta$, and we
+are working in $\lambda_{Di}$ units.
+
+Substituting the three contributions $dn_e\over d|\phi|$,
+$dn_f\over d|\phi|$, and $|dn_\phi\over d|\phi|$ into
+eq.\ (\ref{eq:abel}) we can find three corresponding contributions to
+$\tilde f_i=\tilde f_{ie}+\tilde f_f+\tilde f_\phi$. After
+considerable integration effort they can be expressed in terms of the
+complex Faddeeva function\footnote{The Faddeeva function is related to
+  the Plasma Dispersion function via $Z(z)=i\sqrt{\pi} w(z)$ and
+  to the Dawson integral function $F(z)$ by $w(iz)=?2F(z)$.}
+$w(z)\equiv\etothe{-z^2}{\rm erfc}(-iz)$ , and the
+Gamma function $\Gamma(z)$, as follows:
+\begin{equation}
+  \label{eq:fie}
+  \tilde f_{ie}=\pm{1\over \sqrt{2\pi}}\Im[\theta^{-1/2}w(\sqrt{|\energy|/\theta})],
+\end{equation}
+\begin{equation}
+  \label{eq:ff}
+  \tilde f_{f}={1\over \sqrt{2\pi}}\Re[1-w(i\sqrt{|\energy|})],
+\end{equation}
+\begin{equation}
+  \label{eq:fphi}
+  \tilde f_\phi=-{\sqrt{|\energy|}\over \sqrt{2\pi}\lambda^2}
+  \left[{2\over \sqrt{\pi}} -
+    {\ell+1\over \ell}{\ell+2\over \ell}
+    {\Gamma(1+2/\ell)\over \Gamma(3/2+2/\ell)}
+    \left|\energy\over \psi\right|^{2/\ell}
+    \right].
+\end{equation}
+Eqs. (\ref{eq:fie}) and (\ref{eq:ff}) are equivalent to terms found by
+Chen et al. But they used a Gaussian potential shape so their
+$\tilde f_\phi$ is different, and they used electron Debye length
+units. By virtue of the condition (\ref{eq:shielding}), the
+coefficient of $\sqrt{\energy}$ in $\tilde f_i$ cancels to zero
+between the three terms. However, the term
+$\propto |\energy|^{1/2+2/\ell}$ (from $\tilde f_\phi$) remains. If
+$\ell>4$ its derivative diverges as $|\energy|\to 0$, which is mildly
+unphysical. But it avoids the more implausible non-monotonic behavior
+that a Gaussian potential form has. The standard value $\ell=4$ makes
+the bracket $[2/\sqrt{\pi} -(15\sqrt{\pi}/16)|\energy/\psi|^{1/2}]$,
+and $\tilde f'(0)$ is finite. For $l<4$, $f'(0)=0$. These results make
+no approximations, but assume that $f(v)$ is a function only of
+$\energy$, i.e.\ satisfies the steady Vlasov equation. They are
+illustrated later in Fig.\ \ref{thetaminplot}.
+
+
+\section{Shifted Maxwellian Ions}
+
+If the ion Maxwellian is shifted by $v_s\not=0$ in the frame of the
+hole, then there exists no useful closed form expression for
+$\tilde n_f$ at arbitrary $\phi$. Numerical curves of $\tilde n_f$
+have been given elsewhere[]. They continuously decrease as $v_s$
+increases. Their slope at $\phi=0$ can be shown by expansion to be
+${dn_f\over d|\phi|}=-{1 \over 2} Z'(v_s/\sqrt{2})$, which is what
+determines the attracted species distant shielding length.  Therefore eq.\
+(\ref{eq:shielding}) is modified to become
+\begin{equation}
+  \label{eq:modshield}
+0={1\over \lambda^2}- {1\over \theta} + {1 \over 2} Z'(v_s/\sqrt{2}).  
+\end{equation}
+
+This condition (or its equivalent) at $\phi\to0$ has been referred to,
+in many publications based on prescribing $\tilde f(\energy)$ rather
+than $\phi(z)$, as the ``nonlinear dispersion relation''. It is then
+supposed that it relates the hole's potential amplitude, speed, and
+trapped particle temperature. That is a misleading perspective,
+whether for electron holes or ion holes, because it adopts a
+particular form for the trapped distribution (negative temperature
+Maxwellian), which strongly constrains the potential shape. Actually
+the relative shape of the hole can have a whole range of widths upward
+from a minimum, provided $\phi$ decays at large distances (small
+$\phi$) with second derivative length scale ($\lambda$) satisfying
+eq.\ (\ref{eq:modshield}), and the trapped deficit $\tilde f$ is
+consistent with the rest of the potential shape. A hole's speed must
+not be so great that the combined particle terms
+$-{dn_{reflected}\over d|\phi|}+{dn_{flattrap}\over d|\phi|}$ becomes
+negative, otherwise (\ref{eq:modshield}) cannot be satisfied. That
+requires $-Z'(v_s/\sqrt{2})/2>-1/\theta$. Speed must also be small
+enough that the background attracted species distribution is non-zero
+otherwise there is no phase-space density there, in which it could be
+a hole. The hole amplitude $\psi$ is limited only by the
+non-negativity of $f(v)$, which has only weak dependence on speed and
+width at typical potential amplitudes.
+
+A related misunderstanding is the belief, often repeated, that for an
+ion hole to exist (``a solution of the nonlinear dispersion relation
+[to] exist[s]'') the temperature ratio must satisfy
+$T_e/T_i=\theta > 1/|{\rm min}(-Z'(v_s/\sqrt{2})/2)|\simeq 3.5$. The
+minimum of $-Z'/2$ over all real arguments is -0.285 which is where
+the value 3.5 comes from. But in fact there is a sign error in this
+published criterion and at the $-Z'/2$ minimum eq.\
+(\ref{eq:modshield}) requires $-0.285>-1/\theta$, which is
+$\theta < 3.5$. In any case, the minimum of $-Z'/2$ occurs at a speed
+%1.506*sqrt(2)
+$v_s= 2.13$; so the criterion applies only for the worst case of a
+high speed hole, and not at all to more typical holes lying deeper
+within the attracted species' bulk population, where $-Z'/2$ is
+positive. The relevant effect of finite response of the repelled
+species is instead that it increases the required trapped species
+deficit $|\tilde f_i|$, and makes the requirement of non-negativity
+more stringent. Comprehensive calculations that are noted to provide
+counter-examples to the erroneous criterion are given by Chen et al[].
+
+Detailed calculations of hole structure with $\sech^l$ potential shape
+and unshifted distributions, illustrating the actual hole feasibility,
+are given in Fig.\ \ref{thetaminplot}.
+\begin{figure}[htp]
+  \includegraphics[width=.5\hsize]{ftofvel}\hskip-1.5em(a)
+  \includegraphics[width=.47\hsize]{thetamin}\hskip-1.5em(b)
+\caption{Examples of ion (or electron) holes with unshifted background
+  Maxwellian distributions of both species. (a) the required trapped
+  deficit $\tilde f(v)$ to produce a hole of the form
+  $|\phi|=\psi\sech^l(z/l\lambda)$ with $l=$ 2, 4, or 8, for two ratios of
+  the attracted to repelled species ratio ($T_a/T_e$). (b) The
+  particle $\tilde f_{part}=\tilde f_f+\tilde f_{ie}$ and potential
+  $\tilde f_\phi$ contributions, in combinations $\sqrt{2\pi}\tilde
+  f_{part}$ and $-1-\sqrt{2\pi}\tilde f_\phi$ which are equal
+  at the maximum allowable value of $T_a/T_r$ given the
+  various amplitudes $\psi$.\label{thetaminplot}}
+\end{figure}
+The mathematics (equations \ref{eq:fie} to \ref{eq:fphi}) is identical
+for ion and electron holes, when expressed in units normalized to the
+ion or electron parameters respectively and $T_a/T_r$ the ratio of
+attracted to repelled species temperature. In these normalized units,
+non-negativity of the trapped distribution requires that
+$\sqrt{2\pi}\tilde f > -1$, marked with a dotted line in Fig.\
+\ref{thetaminplot}(a). Thus, of the six cases shown there, only the
+$l=2$ case with equal temperatures $T_a/T_r=1$ is impossible. All the
+others are possible equilibria. If $\psi$ were decreased, none would
+be impossible; if it were increased more cases would become
+unphysical. Fig.\ \ref{thetaminplot}(b) illustrates separately the
+particle (solid line) and potential (dashed line) terms that
+contribute to determining the non-negativity criterion. Where the
+lines for the same $\psi$ value intersect determines the
+maximum permissible value of $T_a/T_r$ which for an ion hole is
+$T_i/T_e=1/\theta$. Clearly, a wide range of this ratio from $10^{-1}$
+to $10^{+1}$ and beyond is permissible depending on the value of
+$\psi$.
+
+If the attracted species has asymmetry in the form of a velocity shift
+$v_s$ relative to the hole, the main effect is a reduction in its
+density response to the hole potential ${dn_f\over d|\phi|}$ and the
+contribution $\tilde f_f$ to the required trapped depletion. But it
+also reduces the level of the flat trapped region to
+$f_f={1\over \sqrt{2\pi}}\exp(-v_s^2/2)$. As $v_s$ is increased,
+therefore, the hole amplitude must be reduced (eventually to $\sim 0$)
+to avoid trapped deficit corresponding to negative distribution
+function. 
+
+It has been shown elsewhere [] that electron holes with unshifted
+Maxwellian distributions of ions and electrons are actually unstable
+to self-acceleration. Ion holes of the same type are also unstable to
+such self-acceleration, but the growth rate is far smaller. So they
+remain in near-equilibrium much longer. For much the same reasons,
+holes in a shifted Maxwellian repelled species background distribution
+are in general not steady equilibria, because they experience a net
+force exerted by the reflected repelled species. Instead they
+accelerate[]. The changing hole velocity (relative to attracted
+background) causes evolution also in the hole amplitude, and as the
+hole moves away from the center of the attracted species' distribution
+peak it decays in depth until eventually it collapses.
+
+
+
+\bibliography{JabRef}
+
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
