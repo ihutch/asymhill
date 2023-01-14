@@ -11,7 +11,7 @@ LIBRARIES := $(LIBRARIES)
 LIBDEPS := $(LIBDEPS)
 COMPILE-SWITCHES:=$(COMPILE-SWITCHES) -Wno-unused-dummy-argument -Wno-integer-division
 #########################################################################
-OBJECTS=BGKint.o
+OBJECTS=BGKint.o Zfun.o
 
 .PRECIOUS : $(OBJECTS)
 # Not needed if fortran default is defeated.
